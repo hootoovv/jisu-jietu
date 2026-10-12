@@ -71,7 +71,7 @@
   }
 </script>
 
-<div class="toolbar" role="toolbar" onpointerdown={stop} ondblclick={stop}>
+<div class="toolbar" role="toolbar" tabindex="-1" onpointerdown={stop} ondblclick={stop}>
   <!-- 撤销 -->
   <button class="tb-btn" class:disabled={!hasUndo} title="撤销 (标注)" disabled={!hasUndo} onclick={() => onundo()}>
     <svg viewBox="0 0 24 24" width="18" height="18">
@@ -145,7 +145,7 @@
       <span class="swatch" style:background={style.color}></span>
     </button>
     {#if popover === 'color'}
-      <div class="popover color-pop" onpointerdown={stop}>
+      <div class="popover color-pop" role="presentation" onpointerdown={stop}>
         <div class="grid16">
           {#each PRESET_COLORS as c (c)}
             <button class="cell" class:selected={style.color.toUpperCase() === c} style:background={c} title={c} onclick={() => pickColor(c)}></button>
@@ -181,7 +181,7 @@
       <span class="dot" style:width={`${style.width * 1.1 + 2}px`} style:height={`${style.width * 1.1 + 2}px`}></span>
     </button>
     {#if popover === 'width'}
-      <div class="popover width-pop" onpointerdown={stop}>
+      <div class="popover width-pop" role="presentation" onpointerdown={stop}>
         <div class="widths">
           {#each PRESET_WIDTHS as w (w)}
             <button class="wcell" class:selected={style.width === w} onclick={() => pickWidth(w)}>
