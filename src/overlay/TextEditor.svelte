@@ -49,6 +49,10 @@
 <div
   bind:this={el}
   class="editor"
+  role="textbox"
+  aria-multiline="true"
+  aria-label="文本标注"
+  tabindex="0"
   contenteditable="true"
   spellcheck="false"
   style:left="{x}px"
