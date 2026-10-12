@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/jetsnap-win", "src-tauri"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+authors = ["JetSnap Dev"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "s"

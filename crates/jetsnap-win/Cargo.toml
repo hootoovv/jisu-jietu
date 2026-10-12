@@ -1,0 +1,22 @@
+[package]
+name = "jetsnap-win"
+description = "JetSnap Windows 系统能力层：捕获 / 窗口枚举 / 合成导出 / 热键解析"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "rayon"] }
+
+# 仅 Windows 需要：Win32 API 绑定与剪贴板
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+    "Win32_System_Registry",
+] }
+arboard = "3"

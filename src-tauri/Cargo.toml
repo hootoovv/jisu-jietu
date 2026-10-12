@@ -1,0 +1,24 @@
+[package]
+name = "jetsnap"
+description = "极速截图 —— QQ 风格的轻量 Windows 截图工具"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lib]
+name = "jetsnap_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+jetsnap-win = { path = "../crates/jetsnap-win" }
+
+[dev-dependencies]
+# 集成测试占位（CI 在 windows-latest 上运行 cargo test）

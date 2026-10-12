@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend deps
+        run: npm install
+
+      - name: Frontend unit tests (vitest)
+        run: npm run test
+
+      - name: Build frontend (vite)
+        run: npm run build
+
+      - name: Rust tests (workspace, host = windows)
+        run: cargo test --workspace
+
+      - name: Rust release build (tauri app)
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml
