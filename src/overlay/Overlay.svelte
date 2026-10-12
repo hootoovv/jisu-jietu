@@ -464,7 +464,7 @@
       await endSession('confirmed');
     } catch (err) {
       // S7 失败语义：保留会话，用户可重试或换出口
-      console.error('[JetSnap] 复制失败:', err);
+      console.error('[jisu-jietu] 复制失败:', err);
       busy = false;
     }
   }
@@ -498,7 +498,7 @@
       await logMetric('N6_save', performance.now() - t0);
       await endSession('confirmed');
     } catch (err) {
-      console.error('[JetSnap] 保存失败:', err);
+      console.error('[jisu-jietu] 保存失败:', err);
       busy = false;
     }
   }
@@ -536,7 +536,7 @@
       class="frozen"
       draggable="false"
       onload={onImgLoad}
-      onerror={() => console.error('[JetSnap] snapshot 加载失败')}
+      onerror={() => console.error('[jisu-jietu] snapshot 加载失败')}
     />
     <canvas bind:this={maskCanvas} class="layer"></canvas>
     <canvas bind:this={annotCanvas} class="layer"></canvas>

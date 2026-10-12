@@ -1,4 +1,4 @@
-# JetSnap 极速截图
+# jisu-jietu 极速截图
 
 模仿 QQ 桌面版（Windows）截图体验的轻量截图工具。
 

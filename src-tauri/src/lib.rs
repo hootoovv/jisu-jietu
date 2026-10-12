@@ -18,7 +18,7 @@ pub fn run() {
     // WindowEvent::Destroyed 兜底）
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        eprintln!("[JetSnap] panic: {info}");
+        eprintln!("[jisu-jietu] panic: {info}");
         default_hook(info);
     }));
 
@@ -54,7 +54,7 @@ pub fn run() {
             let state = handle.state::<AppState>();
             let combo = state.settings.lock().unwrap().hotkey.clone();
             if let Err(e) = hotkey::register(handle, &combo) {
-                eprintln!("[JetSnap] 热键注册失败（{combo}）: {e}");
+                eprintln!("[jisu-jietu] 热键注册失败（{combo}）: {e}");
             }
             tray::create(handle)?;
             Ok(())
@@ -74,5 +74,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running JetSnap");
+        .expect("error while running jisu-jietu");
 }

@@ -30,8 +30,8 @@ impl Default for Settings {
 
 pub fn settings_dir() -> PathBuf {
     std::env::var("APPDATA")
-        .map(|p| PathBuf::from(p).join("JetSnap"))
-        .unwrap_or_else(|_| PathBuf::from(".jetsnap"))
+        .map(|p| PathBuf::from(p).join("jisu-jietu"))
+        .unwrap_or_else(|_| PathBuf::from(".jisu-jietu"))
 }
 
 pub fn settings_path() -> PathBuf {

@@ -1,6 +1,6 @@
 [package]
 name = "jetsnap-win"
-description = "JetSnap Windows 系统能力层：捕获 / 窗口枚举 / 合成导出 / 热键解析"
+description = "极速截图 Windows 系统能力层：捕获 / 窗口枚举 / 合成导出 / 热键解析"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "jetsnap"
+name = "jisu-jietu"
 description = "极速截图 —— QQ 风格的轻量 Windows 截图工具"
 version.workspace = true
 edition.workspace = true

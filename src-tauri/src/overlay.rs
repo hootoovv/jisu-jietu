@@ -18,7 +18,7 @@ pub fn create_overlay(app: &AppHandle, virtual_rect: PhysRect) -> Result<(), Str
     }
 
     let win = WebviewWindowBuilder::new(app, OVERLAY_LABEL, WebviewUrl::App("index.html".into()))
-        .title("JetSnap")
+        .title("极速截图")
         .decorations(false)
         .resizable(false)
         .maximizable(false)
@@ -64,7 +64,7 @@ pub fn open_settings(app: &AppHandle) {
         SETTINGS_LABEL,
         WebviewUrl::App("settings.html".into()),
     )
-    .title("JetSnap 设置")
+    .title("极速截图设置")
     .inner_size(440.0, 400.0)
     .resizable(false)
     .maximizable(false)

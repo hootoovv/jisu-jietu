@@ -32,7 +32,7 @@ pub fn reveal_overlay(app: AppHandle) -> Result<(), String> {
 /// 结束会话：清理资源并销毁覆盖窗口。
 #[tauri::command]
 pub fn end_session(app: AppHandle, outcome: String) {
-    eprintln!("[JetSnap] 会话结束: {outcome}");
+    eprintln!("[jisu-jietu] 会话结束: {outcome}");
     session::finish(&app);
 }
 

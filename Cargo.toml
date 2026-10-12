@@ -5,7 +5,7 @@ members = ["crates/jetsnap-win", "src-tauri"]
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
-authors = ["JetSnap Dev"]
+authors = ["Jisujietu Dev"]
 
 [profile.release]
 lto = true

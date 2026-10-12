@@ -1,7 +1,7 @@
 //! 开机自启（Windows 注册表实现；其他平台返回错误 stub）。
 
 const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-const VALUE_NAME: &str = "JetSnap";
+const VALUE_NAME: &str = "jisujietu";
 
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()

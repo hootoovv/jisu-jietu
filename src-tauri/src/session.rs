@@ -92,7 +92,7 @@ pub fn start_session(app: &AppHandle) {
 
 /// 会话异常终止：清理状态并广播原因（前端 toast / 退出等待态）。
 pub fn abort(app: &AppHandle, reason: &str) {
-    eprintln!("[JetSnap] 会话终止: {reason}");
+    eprintln!("[jisu-jietu] 会话终止: {reason}");
     let state = app.state::<AppState>();
     *state.session.lock().unwrap() = None;
     state.active.store(false, Ordering::SeqCst);
