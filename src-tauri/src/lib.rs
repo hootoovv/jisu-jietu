@@ -43,6 +43,7 @@ pub fn run() {
             commands::get_settings,
             commands::set_hotkey,
             commands::set_autostart,
+            commands::update_preferences,
             commands::copy_image,
             commands::save_image,
             commands::log_metric,

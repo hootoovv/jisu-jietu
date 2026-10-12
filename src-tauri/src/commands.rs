@@ -72,6 +72,24 @@ pub fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// 更新保存偏好（默认目录 / 默认格式）。
+#[tauri::command]
+pub fn update_preferences(
+    app: AppHandle,
+    default_save_dir: Option<String>,
+    last_format: String,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut s = state.settings.lock().unwrap();
+    if s.default_save_dir != default_save_dir {
+        s.default_save_dir = default_save_dir;
+    }
+    if last_format == "png" || last_format == "jpeg" {
+        s.last_format = last_format;
+    }
+    settings::save(&s)
+}
+
 /// 复制选区（含标注）到剪贴板（FR-18）。
 #[tauri::command]
 pub fn copy_image(

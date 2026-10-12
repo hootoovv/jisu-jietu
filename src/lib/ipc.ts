@@ -19,6 +19,9 @@ export const setHotkey = (combo: string) => invoke<string>('set_hotkey', { combo
 
 export const setAutostart = (enabled: boolean) => invoke('set_autostart', { enabled });
 
+export const updatePreferences = (defaultSaveDir: string | null, lastFormat: string) =>
+  invoke('update_preferences', { defaultSaveDir, lastFormat });
+
 export const copyImage = (selection: PhysRect, annotationsPng: Uint8Array) =>
   invoke('copy_image', { selection, annotationsPng });
 
