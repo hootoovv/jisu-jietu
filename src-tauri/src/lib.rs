@@ -1,18 +1,77 @@
-//! JetSnap 应用入口（M0 骨架版本）。
-//!
-//! - 常驻托盘 + 全局热键在 M1 接入；
-//! - 本文件在后续里程碑中逐步补全会话管线。
+//! JetSnap 应用入口：常驻托盘 + 全局热键 + snapshot 协议 + 命令注册。
 
-#![allow(dead_code)] // M0 阶段部分模块尚未接线
-
+mod commands;
+mod hotkey;
+mod overlay;
+mod protocol;
+mod session;
 mod settings;
 mod state;
+mod tray;
+
+use tauri::Manager;
+
+use crate::state::AppState;
 
 pub fn run() {
+    // panic hook：会话内 panic 至少留下日志（开发计划 M6；窗口清理由
+    // WindowEvent::Destroyed 兜底）
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        eprintln!("[JetSnap] panic: {info}");
+        default_hook(info);
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![])
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        session::start_session(app);
+                    }
+                })
+                .build(),
+        )
+        .register_uri_scheme_protocol("snapshot", protocol::handle_snapshot)
+        .manage(AppState::new(settings::load()))
+        .invoke_handler(tauri::generate_handler![
+            commands::fetch_session,
+            commands::reveal_overlay,
+            commands::end_session,
+            commands::trigger_capture,
+            commands::get_settings,
+            commands::set_hotkey,
+            commands::set_autostart,
+            commands::copy_image,
+            commands::save_image,
+            commands::log_metric,
+        ])
+        .setup(|app| {
+            let handle = app.handle();
+            // 注册默认/用户热键（失败仅告警，不阻塞启动）
+            let state = handle.state::<AppState>();
+            let combo = state.settings.lock().unwrap().hotkey.clone();
+            if let Err(e) = hotkey::register(handle, &combo) {
+                eprintln!("[JetSnap] 热键注册失败（{combo}）: {e}");
+            }
+            tray::create(handle)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // 兜底清理：覆盖窗口被外部销毁（如 Alt+F4）时回收会话
+            if window.label() == overlay::OVERLAY_LABEL {
+                if let tauri::WindowEvent::Destroyed = event {
+                    let handle = window.app_handle();
+                    if let Some(state) = handle.try_state::<AppState>() {
+                        *state.session.lock().unwrap() = None;
+                        state
+                            .active
+                            .store(false, std::sync::atomic::Ordering::SeqCst);
+                    }
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running JetSnap");
 }

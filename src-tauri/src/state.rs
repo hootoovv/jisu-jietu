@@ -1,5 +1,6 @@
 //! 应用状态（会话与设置），全部经 Mutex 保护。
 
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU32;
 use std::sync::Mutex;
 
@@ -21,10 +22,11 @@ pub struct SessionData {
     pub hotkey_elapsed_ms: f64,
 }
 
-#[derive(Default)]
 pub struct AppState {
     pub settings: Mutex<Settings>,
     pub session: Mutex<Option<SessionData>>,
+    /// 会话进行中标记（捕获期间 session 尚未就绪，用它防重入）
+    pub active: AtomicBool,
     pub next_id: AtomicU32,
 }
 
@@ -33,6 +35,7 @@ impl AppState {
         Self {
             settings: Mutex::new(settings),
             session: Mutex::new(None),
+            active: AtomicBool::new(false),
             next_id: AtomicU32::new(1),
         }
     }

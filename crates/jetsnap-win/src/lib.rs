@@ -13,11 +13,8 @@
 pub mod compose;
 pub mod hotkey_combo;
 
-#[cfg(windows)]
 pub mod autostart;
-#[cfg(windows)]
 pub mod capture;
-#[cfg(windows)]
 pub mod window_enum;
 
 use serde::{Deserialize, Serialize};

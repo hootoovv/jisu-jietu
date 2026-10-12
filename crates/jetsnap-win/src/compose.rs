@@ -115,7 +115,7 @@ pub fn bgra_to_jpeg(bgra: &[u8], w: u32, h: u32, quality: u8) -> Result<Vec<u8>,
     encode_jpeg(&rgba, w, h, quality)
 }
 
-/// RGBA → 系统剪贴板（仅 Windows；arboard 写 CF_DIBV5/CF_DIB）。
+/// RGBA → 系统剪贴板（Windows 上经 arboard 写 CF_DIBV5/CF_DIB）。
 #[cfg(windows)]
 pub fn copy_rgba_to_clipboard(rgba: &[u8], w: u32, h: u32) -> Result<(), String> {
     use arboard::{Clipboard, ImageData};
@@ -126,6 +126,11 @@ pub fn copy_rgba_to_clipboard(rgba: &[u8], w: u32, h: u32) -> Result<(), String>
         bytes: std::borrow::Cow::Borrowed(rgba),
     };
     clip.set_image(img).map_err(|e| format!("写入剪贴板失败: {e}"))
+}
+
+#[cfg(not(windows))]
+pub fn copy_rgba_to_clipboard(_rgba: &[u8], _w: u32, _h: u32) -> Result<(), String> {
+    Err("剪贴板仅支持 Windows".into())
 }
 
 #[cfg(test)]
