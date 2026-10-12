@@ -85,8 +85,11 @@ npm run tauri build          # 产出 NSIS 安装包（含 icon.ico）
 
 ## 架构要点
 
-- **显示 / 导出双通道**：显示走 `snapshot://<id>` 自定义协议直出 JPEG(q92)；
-  导出用 Rust 侧持有的原始无损 BGRA 裁剪合成——速度与画质各取所需。
+- **显示 / 导出双通道**：显示走 snapshot 自定义协议直出 JPEG(q92)——Windows/Android
+  的 WebView2 将自定义协议映射为 `http://snapshot.localhost/<id>`（页面自拼 URL 必须
+  用映射形态），协议应答带 `Access-Control-Allow-Origin` 且 `<img crossorigin>`
+  以避免马赛克导出的画布跨域污染；导出用 Rust 侧持有的原始无损 BGRA 裁剪合成——
+  速度与画质各取所需。
 - **覆盖窗口不透明**：冻结位图即窗口内容，蒙版是 Canvas 绘制内容，
   绕开透明窗口 + WebView2 的性能坑。
 - **坐标纪律**：IPC/绘制一律物理像素，DOM 一律逻辑像素，

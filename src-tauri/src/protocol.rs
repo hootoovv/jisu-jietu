@@ -27,6 +27,9 @@ pub fn handle_snapshot<R: tauri::Runtime>(
             .status(200)
             .header("Content-Type", "image/jpeg")
             .header("Cache-Control", "no-store")
+            // 前端 <img crossorigin="anonymous">（马赛克导出需读像素，画布不能被跨域污染），
+            // 故必须应答 CORS 头，否则图片直接加载失败
+            .header("Access-Control-Allow-Origin", "*")
             .body(std::borrow::Cow::Owned(bytes))
             .expect("构建 snapshot 响应失败"),
         None => Response::builder()

@@ -47,7 +47,16 @@
   // ---------- 会话 ----------
   let session = $state<FrozenPayload | null>(null);
   const dpr = window.devicePixelRatio || 1;
-  const snapshotUrl = $derived(session ? `snapshot://${session.snapshotId}` : '');
+
+  // Windows/Android 的 WebView2 将自定义协议映射为 http://<scheme>.localhost/<path>；
+  // 该映射只作用于 wry 接管的页面导航 URL，页面自拼的子资源 URL 必须直接用映射形态
+  function snapshotSrc(id: number): string {
+    return /Windows|Android/i.test(navigator.userAgent)
+      ? `http://snapshot.localhost/${id}`
+      : `snapshot://localhost/${id}`;
+  }
+
+  const snapshotUrl = $derived(session ? snapshotSrc(session.snapshotId) : '');
   const virtual = $derived<Rect | null>(session?.virtualRect ?? null);
 
   // ---------- 交互状态 ----------
@@ -535,8 +544,13 @@
       alt=""
       class="frozen"
       draggable="false"
+      crossorigin="anonymous"
       onload={onImgLoad}
-      onerror={() => console.error('[jisu-jietu] snapshot 加载失败')}
+      onerror={() => {
+        console.error('[jisu-jietu] snapshot 加载失败');
+        // 冻结图加载失败则无法 reveal，必须结束会话，否则 active 防重入会吞掉后续热键
+        void endSession('cancelled');
+      }}
     />
     <canvas bind:this={maskCanvas} class="layer"></canvas>
     <canvas bind:this={annotCanvas} class="layer"></canvas>

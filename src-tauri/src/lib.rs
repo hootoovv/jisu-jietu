@@ -73,6 +73,15 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running jisu-jietu");
+        .build(tauri::generate_context!())
+        .expect("error while building jisu-jietu")
+        .run(|_app, event| {
+            // 托盘常驻：最后一个窗口关闭（会话结束）触发的退出请求必须阻止，
+            // 否则截一次图整个应用就退出；显式退出仅走托盘菜单的 app.exit(0)
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                if code.is_none() {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
