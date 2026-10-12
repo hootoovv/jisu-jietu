@@ -242,6 +242,12 @@
       drag = { mode: 'move', startPt: p, startSel: selection, moved: true };
       phase = 'adjust';
     } else if (tool) {
+      if (tool === 'text') {
+        // 必须 cancel pointerdown：否则同一交互序列的 mousedown 默认行为会把焦点
+        // 抢回 body，onMount 里的 el.focus() 随即被 onblur 覆盖，空文本触发
+        // oncancel，编辑器挂载当帧自毁（表现为点击无反应）
+        e.preventDefault();
+      }
       startDrawing(p);
     } else {
       drag = { mode: 'select', startPt: p, startSel: selection ?? { x: p.x, y: p.y, w: 0, h: 0 }, moved: false };
@@ -317,7 +323,8 @@
   }
 
   function onDoubleClick(e: MouseEvent) {
-    if (busy || phase === 'textEditing') return;
+    // 工具激活时双击属于绘制语义（如文本工具连续放置），不得触发「双击复制」
+    if (busy || phase === 'textEditing' || tool) return;
     const p = evPt(e);
     if (selection && inRect(selection, p)) void confirmCopy();
   }
