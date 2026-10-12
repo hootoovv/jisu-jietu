@@ -8,8 +8,17 @@
    */
   import { onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
-  import { endSession, fetchSession, logMetric, revealOverlay } from '../lib/ipc';
-  import { drawAnnotations, drawMask, invalidateMosaicCache } from '../lib/render';
+  import { save as saveDialog } from '@tauri-apps/plugin-dialog';
+  import {
+    copyImage,
+    endSession,
+    fetchSession,
+    getSettings,
+    logMetric,
+    revealOverlay,
+    saveImage,
+  } from '../lib/ipc';
+  import { composeAnnotationsPng, drawAnnotations, drawMask } from '../lib/render';
   import {
     badgePosition,
     clampRect,
@@ -426,21 +435,70 @@
     styles[tool] = { ...styles[tool], ...patch };
   }
 
-  // ---------- 导出（M4 里程碑接真实链路） ----------
+  // ---------- 导出链路（复制/保存，开发计划 5.1.5 / S7 失败语义） ----------
+
+  function timestamp(): string {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
+
+  function joinPath(dir: string, name: string): string {
+    const d = dir.replace(/[\\/]+$/, '');
+    return d.length > 0 ? `${d}\\${name}` : name;
+  }
+
+  async function composePng(): Promise<Uint8Array> {
+    if (!selection || !virtual) throw new Error('无有效选区');
+    return composeAnnotationsPng(annotations, selection, virtual, imgEl, dpr);
+  }
+
   async function confirmCopy() {
+    if (!selection || busy) return;
     busy = true;
+    const t0 = performance.now();
     try {
+      const png = await composePng();
+      await copyImage(selection, png);
+      await logMetric('N5_copy', performance.now() - t0);
       await endSession('confirmed');
-    } finally {
+    } catch (err) {
+      // S7 失败语义：保留会话，用户可重试或换出口
+      console.error('[JetSnap] 复制失败:', err);
       busy = false;
     }
   }
 
   async function confirmSave() {
+    if (!selection || busy) return;
     busy = true;
     try {
+      const png = await composePng();
+      const s = await getSettings();
+      const fmt = s.lastFormat === 'jpeg' ? 'jpeg' : 'png';
+      const defaultPath = joinPath(
+        s.defaultSaveDir ?? '',
+        `截图_${timestamp()}.${fmt === 'jpeg' ? 'jpg' : 'png'}`,
+      );
+      const path = await saveDialog({
+        title: '保存截图',
+        defaultPath,
+        filters: [
+          { name: 'PNG 图片', extensions: ['png'] },
+          { name: 'JPEG 图片', extensions: ['jpg', 'jpeg'] },
+        ],
+      });
+      if (!path) {
+        busy = false; // 用户取消对话框，会话继续
+        return;
+      }
+      const format = /\.(jpe?g)$/i.test(path) ? 'jpeg' : 'png';
+      const t0 = performance.now();
+      await saveImage(selection, png, path, format);
+      await logMetric('N6_save', performance.now() - t0);
       await endSession('confirmed');
-    } finally {
+    } catch (err) {
+      console.error('[JetSnap] 保存失败:', err);
       busy = false;
     }
   }
