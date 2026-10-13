@@ -702,6 +702,10 @@
   </style>
 </svelte:head>
 
+<!-- 禁用 WebView 自带右键菜单（Chromium 右键菜单是 contextmenu 的默认行为，
+     preventDefault 即可抑制；截图覆盖层的右键属误触源） -->
+<svelte:window oncontextmenu={(e) => e.preventDefault()} />
+
 {#if session}
   <div
     class="layers"
