@@ -14,7 +14,7 @@ import {
   mosaicBlockForWidth,
   stepNumberMap,
 } from './geometry';
-import { MASK_OPACITY, SEL_BORDER } from './constants';
+import { HIGHLIGHTER_ALPHA, MASK_OPACITY, SEL_BORDER } from './constants';
 
 const FONT_STACK = '"Segoe UI", "Microsoft YaHei", system-ui, sans-serif';
 
@@ -48,10 +48,11 @@ export function drawMask(ctx: CanvasRenderingContext2D, opts: MaskOptions): void
     ctx.fillRect(0, 0, W, H);
     if (hover) {
       // 悬停预高亮：轻微提亮 + 亮边框（预览即所得，2.3.3）
+      // 边框 2px 且提亮蓝色：50% 压暗背景下需高可见
       ctx.fillStyle = 'rgba(255,255,255,0.10)';
       ctx.fillRect(hover.x, hover.y, hover.w, hover.h);
-      ctx.strokeStyle = 'rgba(74,158,255,0.9)';
-      ctx.lineWidth = Math.max(1, dpr);
+      ctx.strokeStyle = 'rgba(90,169,255,1)';
+      ctx.lineWidth = 2 * dpr;
       ctx.strokeRect(hover.x, hover.y, hover.w, hover.h);
     }
   }
@@ -182,6 +183,25 @@ function drawAnnotation(
       if (!a.points || a.points.length === 0) break;
       ctx.strokeStyle = a.color;
       ctx.lineWidth = lw;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      a.points.forEach((p, i) => {
+        const x = p.x - offset.x;
+        const y = p.y - offset.y;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      break;
+    }
+    case 'highlighter': {
+      // 标记笔：宽笔触半透明（文字高亮语义）。单次 stroke 内不自叠加，
+      // 多笔重叠自然加深，与真实荧光笔一致
+      if (!a.points || a.points.length === 0) break;
+      ctx.globalAlpha = HIGHLIGHTER_ALPHA;
+      ctx.strokeStyle = a.color;
+      ctx.lineWidth = Math.max(2, lw);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();

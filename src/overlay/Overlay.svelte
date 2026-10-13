@@ -36,7 +36,16 @@
     placeToolbar,
     rectCorners,
   } from '../lib/geometry';
-  import { BADGE_SIZE, CLICK_SLOP_PX, HANDLE_SIZE, MIN_SELECTION, TOOLBAR_SIZE } from '../lib/constants';
+  import {
+    BADGE_SIZE,
+    CLICK_SLOP_PX,
+    CURSOR_CROSSHAIR,
+    HANDLE_SIZE,
+    MIN_SELECTION,
+    TOOLBAR_SIZE,
+    TOOL_CURSORS,
+    TOOL_DEFAULT_STYLES,
+  } from '../lib/constants';
   import type {
     Annotation,
     FrozenPayload,
@@ -74,7 +83,7 @@
   let tool = $state<ToolKind | null>(null);
   let textEdit = $state<Pt | null>(null); // 物理坐标
   let busy = $state(false);
-  let cursor = $state('crosshair');
+  let cursor = $state(CURSOR_CROSSHAIR);
   let annSeq = 0;
   let loadStart = 0;
 
@@ -92,13 +101,9 @@
   let maskCanvas = $state<HTMLCanvasElement | null>(null);
   let annotCanvas = $state<HTMLCanvasElement | null>(null);
 
-  function defaultStyles(): Record<ToolKind, ToolStyle> {
-    const d = {} as Record<ToolKind, ToolStyle>;
-    const kinds: ToolKind[] = ['rect', 'ellipse', 'arrow', 'pen', 'mosaic', 'text', 'step'];
-    for (const k of kinds) d[k] = { color: '#E8424C', width: 4 };
-    return d;
-  }
-  let styles = $state<Record<ToolKind, ToolStyle>>(defaultStyles());
+  // 各工具默认颜色互异（TOOL_DEFAULT_STYLES）；patchStyle 只写当前工具，
+  // 颜色/线宽按工具独立记忆，切换工具互不覆盖
+  let styles = $state<Record<ToolKind, ToolStyle>>({ ...TOOL_DEFAULT_STYLES });
 
   const currentStyle = $derived(tool ? styles[tool] : { color: '#E8424C', width: 4 });
 
@@ -185,7 +190,7 @@
     tool = null;
     textEdit = null;
     busy = false;
-    cursor = 'crosshair';
+    cursor = CURSOR_CROSSHAIR;
     annSeq = 0;
     loadStart = performance.now();
     invalidateMosaicCache(); // 冻结图已更换，马赛克纹理缓存必须失效
@@ -303,13 +308,13 @@
     // 悬停预高亮（无选区、无工具）
     if (!selection && !tool && session) {
       hover = hitTestWindows(session.windows, p);
-      cursor = 'crosshair';
+      cursor = CURSOR_CROSSHAIR;
     } else {
       hover = null;
       const hi = handleHitIndex(p);
       if (hi !== null) cursor = CURSOR_BY_CORNER[hi];
       else if (selection && inRect(selection, p) && !tool) cursor = 'move';
-      else cursor = 'crosshair';
+      else cursor = tool ? TOOL_CURSORS[tool] : CURSOR_CROSSHAIR;
     }
   }
 
@@ -367,6 +372,7 @@
         drawing = { ...base, line: { x1: p.x, y1: p.y, x2: p.x, y2: p.y } };
         break;
       case 'pen':
+      case 'highlighter':
       case 'mosaic':
         drawing = { ...base, points: [p] };
         break;
@@ -392,6 +398,7 @@
         if (drawing.line) drawing.line = { ...drawing.line, x2: p.x, y2: p.y };
         break;
       case 'pen':
+      case 'highlighter':
       case 'mosaic':
         if (drawing.points) {
           const last = drawing.points[drawing.points.length - 1];
@@ -423,6 +430,7 @@
           dist({ x: d.line.x1, y: d.line.y1 }, { x: d.line.x2, y: d.line.y2 }) > 4 * dpr;
         break;
       case 'pen':
+      case 'highlighter':
         ok = !!d.points && d.points.length >= 2;
         break;
       case 'mosaic':
@@ -465,6 +473,8 @@
 
   function pickTool(t: ToolKind | null) {
     tool = t;
+    // 立即切换光标，不等首次移动
+    cursor = t ? TOOL_CURSORS[t] : CURSOR_CROSSHAIR;
   }
 
   function patchStyle(patch: Partial<ToolStyle>) {

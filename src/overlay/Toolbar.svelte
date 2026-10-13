@@ -39,16 +39,28 @@
     { kind: 'ellipse', label: '椭圆', title: '椭圆' },
     { kind: 'arrow', label: '箭头', title: '箭头' },
     { kind: 'pen', label: '画笔', title: '画笔' },
+    { kind: 'highlighter', label: '标记笔', title: '标记笔（高亮）' },
     { kind: 'mosaic', label: '马赛克', title: '马赛克' },
     { kind: 'text', label: '文本', title: '文本框' },
     { kind: 'step', label: '标号', title: '数字标号' },
   ];
 
   let popover = $state<'color' | 'width' | null>(null);
+  /** 弹层向上弹出（工具条贴近屏幕下沿时，向下展开会被裁掉） */
+  let popoverAbove = $state(false);
   let customColor = $state('#E8424C');
 
-  function togglePopover(which: 'color' | 'width') {
-    popover = popover === which ? null : which;
+  /** 色板弹层约 130px 高（2 行色格 + 自定义行），不足则向上弹 */
+  const POPOVER_SPACE_NEED = 130;
+
+  function togglePopover(which: 'color' | 'width', e: MouseEvent) {
+    if (popover === which) {
+      popover = null;
+      return;
+    }
+    const btn = e.currentTarget as HTMLElement;
+    popoverAbove = window.innerHeight - btn.getBoundingClientRect().bottom < POPOVER_SPACE_NEED;
+    popover = which;
   }
 
   function pickColor(c: string) {
@@ -111,6 +123,11 @@
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 20 20 4M20 4h-8M20 4v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
       {:else if t.kind === 'pen'}
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 20c1-4 2-6 5-9l8-8 4 4-8 8c-3 3-5 4-9 5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+      {:else if t.kind === 'highlighter'}
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path d="M6 21l1.4-4.2 8.1-8.1 2.8 2.8-8.1 8.1L6 21z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+          <path d="M14.4 4.4l2-2c.5-.5 1.3-.5 1.8 0l3.4 3.4c.5.5.5 1.3 0 1.8l-2 2-5.2-5.2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+        </svg>
       {:else if t.kind === 'mosaic'}
         <svg viewBox="0 0 24 24" width="18" height="18">
           <rect x="4" y="4" width="5" height="5" fill="currentColor" />
@@ -140,12 +157,12 @@
       class:disabled={!styleEnabled}
       title="颜色"
       disabled={!styleEnabled}
-      onclick={() => styleEnabled && togglePopover('color')}
+      onclick={(e) => styleEnabled && togglePopover('color', e)}
     >
       <span class="swatch" style:background={style.color}></span>
     </button>
     {#if popover === 'color'}
-      <div class="popover color-pop" role="presentation" onpointerdown={stop}>
+      <div class="popover color-pop" class:above={popoverAbove} role="presentation" onpointerdown={stop}>
         <div class="grid16">
           {#each PRESET_COLORS as c (c)}
             <button class="cell" class:selected={style.color.toUpperCase() === c} style:background={c} title={c} onclick={() => pickColor(c)}></button>
@@ -176,12 +193,12 @@
       class:disabled={!styleEnabled}
       title="线宽"
       disabled={!styleEnabled}
-      onclick={() => styleEnabled && togglePopover('width')}
+      onclick={(e) => styleEnabled && togglePopover('width', e)}
     >
       <span class="dot" style:width={`${style.width * 1.1 + 2}px`} style:height={`${style.width * 1.1 + 2}px`}></span>
     </button>
     {#if popover === 'width'}
-      <div class="popover width-pop" role="presentation" onpointerdown={stop}>
+      <div class="popover width-pop" class:above={popoverAbove} role="presentation" onpointerdown={stop}>
         <div class="widths">
           {#each PRESET_WIDTHS as w (w)}
             <button class="wcell" class:selected={style.width === w} onclick={() => pickWidth(w)}>
@@ -221,8 +238,9 @@
 </div>
 
 <style>
+  /* 亮色主题：覆盖层背景为 50% 压暗画面，暗色工具条与之色差过小 */
   .toolbar {
-    --tb-bg: #2b2f36;
+    --tb-bg: #f4f5f7;
     display: flex;
     align-items: center;
     gap: 2px;
@@ -230,8 +248,8 @@
     background: var(--tb-bg);
     border-radius: 8px;
     box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.35),
-      0 0 0 1px rgba(255, 255, 255, 0.08);
+      0 4px 16px rgba(0, 0, 0, 0.28),
+      0 0 0 1px rgba(0, 0, 0, 0.1);
     user-select: none;
   }
 
@@ -244,13 +262,13 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: #d6d9e0;
+    color: #3c4250;
     cursor: pointer;
     transition: background 0.12s ease;
   }
 
   .tb-btn:hover:not(.disabled):not(:disabled) {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.07);
   }
 
   .tb-btn.active {
@@ -259,7 +277,7 @@
   }
 
   .tb-btn.primary {
-    color: #7ab7ff;
+    color: #1f6feb;
   }
 
   .tb-btn:disabled {
@@ -271,7 +289,7 @@
     width: 1px;
     height: 20px;
     margin: 0 4px;
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.12);
   }
 
   .swatch {
@@ -279,13 +297,13 @@
     height: 16px;
     border-radius: 4px;
     box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.35),
-      0 0 0 1px rgba(0, 0, 0, 0.4);
+      inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+      0 0 0 1px rgba(0, 0, 0, 0.25);
   }
 
   .dot {
     border-radius: 50%;
-    background: #e6e9ef;
+    background: #3c4250;
   }
 
   .pop-wrap {
@@ -302,9 +320,15 @@
     border-radius: 8px;
     padding: 10px;
     box-shadow:
-      0 8px 24px rgba(0, 0, 0, 0.45),
-      0 0 0 1px rgba(255, 255, 255, 0.08);
+      0 8px 24px rgba(0, 0, 0, 0.3),
+      0 0 0 1px rgba(0, 0, 0, 0.1);
     z-index: 30;
+  }
+
+  /* 工具条贴近屏幕下沿时向上弹，避免二级弹层被裁掉 */
+  .popover.above {
+    top: auto;
+    bottom: calc(100% + 8px);
   }
 
   .grid16 {
@@ -319,7 +343,7 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
   }
 
   .cell:hover {
@@ -328,7 +352,7 @@
 
   .cell.selected {
     box-shadow:
-      0 0 0 2px #fff,
+      0 0 0 2px #3d82f6,
       inset 0 0 0 1px rgba(0, 0, 0, 0.3);
   }
 
@@ -338,7 +362,7 @@
     gap: 6px;
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
   }
 
   .custom-row input[type='color'] {
@@ -353,10 +377,10 @@
   .hex {
     width: 84px;
     height: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.2);
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.3);
-    color: #e6e9ef;
+    background: #fff;
+    color: #1f2937;
     font-size: 12px;
     text-align: center;
     font-family: Consolas, monospace;
@@ -382,20 +406,20 @@
   }
 
   .wcell:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.07);
   }
 
   .wcell.selected {
-    background: rgba(61, 130, 246, 0.35);
+    background: rgba(61, 130, 246, 0.22);
   }
 
   .wcell .dot {
-    background: #e6e9ef;
+    background: #3c4250;
   }
 
   .wlabel {
     font-size: 10px;
-    color: #aab0ba;
+    color: #6b7280;
   }
 
   .slider-row {
@@ -404,12 +428,12 @@
     gap: 8px;
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
   }
 
   .slabel {
     font-size: 12px;
-    color: #aab0ba;
+    color: #6b7280;
     white-space: nowrap;
   }
 
@@ -420,7 +444,7 @@
 
   .sval {
     font-size: 12px;
-    color: #e6e9ef;
+    color: #1f2937;
     width: 34px;
     font-family: Consolas, monospace;
   }

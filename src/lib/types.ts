@@ -41,7 +41,15 @@ export interface Settings {
 
 // ---------- 会话内前端状态类型 ----------
 
-export type ToolKind = 'rect' | 'ellipse' | 'arrow' | 'pen' | 'mosaic' | 'text' | 'step';
+export type ToolKind =
+  | 'rect'
+  | 'ellipse'
+  | 'arrow'
+  | 'pen'
+  | 'highlighter'
+  | 'mosaic'
+  | 'text'
+  | 'step';
 
 export interface Pt {
   x: number;
