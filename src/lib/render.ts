@@ -135,14 +135,19 @@ export function drawAnnotations(ctx: CanvasRenderingContext2D, opts: AnnotateOpt
   }
 }
 
-/** 测量文本标注的物理像素包围尺寸（与绘制同款字体/行高：600 字重，行高 1.25）。 */
-export function measureTextSize(text: string, width: number, dpr: number): { w: number; h: number } {
-  const fontPx = fontSizeForWidth(width) * dpr;
+/** 测量文本标注的物理像素包围尺寸（与绘制同款字体/字重/行高：行高 1.25）。 */
+export function measureTextSize(
+  text: string,
+  style: { size?: number; bold?: boolean; font?: string },
+  dpr: number,
+): { w: number; h: number } {
+  const fontPx = (style.size ?? 18) * dpr;
+  const family = style.font ? `'${style.font}', ${FONT_STACK}` : FONT_STACK;
   const lines = text.split('\n');
   const c = getMeasureCanvas();
   const ctx = c.getContext('2d');
   if (!ctx) return { w: fontPx * lines.length * 2, h: fontPx * 1.25 * lines.length };
-  ctx.font = `600 ${fontPx}px ${FONT_STACK}`;
+  ctx.font = `${style.bold ? 800 : 600} ${fontPx}px ${family}`;
   let w = 0;
   for (const line of lines) w = Math.max(w, ctx.measureText(line).width);
   return { w: Math.ceil(w), h: Math.ceil(fontPx * 1.25 * lines.length) };
@@ -273,9 +278,10 @@ function drawAnnotation(
     }
     case 'text': {
       if (!a.rect || !a.text) break;
-      const fontPx = fontSizeForWidth(a.width) * dpr;
+      const fontPx = (a.size ?? 18) * dpr;
+      const family = a.font ? `'${a.font}', ${FONT_STACK}` : FONT_STACK;
       ctx.fillStyle = a.color;
-      ctx.font = `600 ${fontPx}px ${FONT_STACK}`;
+      ctx.font = `${a.bold ? 800 : 600} ${fontPx}px ${family}`;
       ctx.textBaseline = 'top';
       const lines = a.text.split('\n');
       const lineH = fontPx * 1.25;

@@ -12,11 +12,15 @@
     color: string;
     fontSize: number;
     maxWidth: number;
+    /** 字体族（空 = 默认栈）与加粗，与提交后的标注渲染保持一致 */
+    font?: string;
+    bold?: boolean;
     oncommit: (text: string) => void;
     oncancel: () => void;
   }
 
-  let { x, y, color, fontSize, maxWidth, oncommit, oncancel }: Props = $props();
+  let { x, y, color, fontSize, maxWidth, font = '', bold = false, oncommit, oncancel }: Props =
+    $props();
 
   let el = $state<HTMLDivElement | undefined>(undefined);
   let done = false;
@@ -59,9 +63,16 @@
   style:top="{y}px"
   style:color={color}
   style:font-size="{fontSize}px"
+  style:font-family={font ? `'${font}', 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif` : undefined}
+  style:font-weight={bold ? '800' : '600'}
   style:max-width="{maxWidth}px"
   onkeydown={onKeydown}
-  onblur={() => commit()}
+  onblur={(e) => {
+    // 焦点移入工具条（如调整字体设置）不提交，点回编辑器继续输入
+    const rt = e.relatedTarget as HTMLElement | null;
+    if (rt && rt.closest('.toolbar')) return;
+    commit();
+  }}
   onpointerdown={(e) => e.stopPropagation()}
   ondblclick={(e) => e.stopPropagation()}
 ></div>

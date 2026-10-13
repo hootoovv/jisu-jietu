@@ -293,35 +293,51 @@ describe('标注对象编辑：moveAnnotation / resizeAnnotation', () => {
     const pen: Annotation = { id: 2, kind: 'pen', color: '#0f0', width: 4, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] };
     expect(moveAnnotation(pen, 10, 10).points).toEqual([{ x: 11, y: 12 }, { x: 13, y: 14 }]);
   });
-  it('以对角锚点等比放大 2 倍（矩形）', () => {
+  it('对角锚点放大 2 倍（矩形，两轴同比例）', () => {
     const ann: Annotation = { id: 1, kind: 'rect', color: '#f00', width: 4, rect: { x: 100, y: 100, w: 50, h: 50 } };
     const anchor = { x: 100, y: 100 }; // 左上锚，拖右下角
     const out = resizeAnnotation(ann, anchor, { x: 150, y: 150 }, { x: 200, y: 200 }) as Annotation;
     expect(out.rect?.w).toBe(100);
+    expect(out.rect?.h).toBe(100);
     expect(out.rect?.x).toBe(100); // 锚点不动
     expect(out.rect?.y).toBe(100);
   });
-  it('缩放比例钳制 [0.15, 4]', () => {
+  it('任意宽高比：仅横向拉伸时高度不变', () => {
+    const ann: Annotation = { id: 1, kind: 'rect', color: '#f00', width: 4, rect: { x: 0, y: 0, w: 100, h: 50 } };
+    const out = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 100, y: 50 }, { x: 300, y: 50 }) as Annotation;
+    expect(out.rect?.w).toBe(300); // sx=3
+    expect(out.rect?.h).toBe(50); // sy=1，纵轴不动
+  });
+  it('缩放比例逐轴钳制 [0.1, 8]', () => {
     const ann: Annotation = { id: 1, kind: 'rect', color: '#f00', width: 4, rect: { x: 0, y: 0, w: 100, h: 100 } };
     const tiny = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 1, y: 1 }) as Annotation;
-    expect(tiny.rect?.w).toBe(15); // 100 × 0.15
+    expect(tiny.rect?.w).toBe(10); // 100 × 0.1
     const huge = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 100000, y: 100000 }) as Annotation;
-    expect(huge.rect?.w).toBe(400);
+    expect(huge.rect?.w).toBe(800);
   });
-  it('文本缩放同步字号档', () => {
-    const ann: Annotation = { id: 3, kind: 'text', color: '#00f', width: 4, text: 'x', rect: { x: 0, y: 0, w: 10, h: 20 } };
+  it('文本缩放同步字号 size（取两轴较大比例）', () => {
+    const ann: Annotation = { id: 3, kind: 'text', color: '#00f', size: 18, text: 'x', rect: { x: 0, y: 0, w: 10, h: 20 } };
     const out = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 150, y: 150 }) as Annotation;
-    expect(out.width).toBe(6);
+    expect(out.size).toBe(27);
     const back = resizeAnnotation(out, { x: 0, y: 0 }, { x: 150, y: 150 }, { x: 100, y: 100 }) as Annotation;
-    expect(back.width).toBe(4);
+    expect(back.size).toBe(18);
   });
-  it('笔画点位整体缩放', () => {
+  it('标记笔缩放：点位逐轴缩放 + 笔宽（高亮厚度）随较大比例', () => {
     const ann: Annotation = {
       id: 4, kind: 'highlighter', color: '#ff0', width: 16,
       points: [{ x: 10, y: 10 }, { x: 110, y: 10 }],
     };
-    const out = resizeAnnotation(ann, { x: 10, y: 10 }, { x: 110, y: 10 }, { x: 210, y: 10 }) as Annotation;
+    const out = resizeAnnotation(ann, { x: 10, y: 10 }, { x: 110, y: 10 }, { x: 210, y: 30 }) as Annotation;
     expect(out.points?.[0]).toEqual({ x: 10, y: 10 });
-    expect(out.points?.[1]?.x).toBe(210);
+    expect(out.points?.[1]?.x).toBe(210); // sx=2
+    expect(out.width).toBe(32); // 宽度 ×2
+  });
+  it('马赛克缩放同步块径档', () => {
+    const ann: Annotation = {
+      id: 5, kind: 'mosaic', color: '#999', width: 8,
+      points: [{ x: 0, y: 0 }, { x: 50, y: 0 }],
+    };
+    const out = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 50, y: 0 }, { x: 100, y: 0 }) as Annotation;
+    expect(out.width).toBe(16);
   });
 });

@@ -67,11 +67,23 @@ export interface Annotation {
   line?: { x1: number; y1: number; x2: number; y2: number };
   points?: Pt[];
   text?: string;
+  /** 文本专属：字体族（空 = 默认栈） */
+  font?: string;
+  /** 文本专属：字号（逻辑像素，独立于 width） */
+  size?: number;
+  /** 文本专属：加粗 */
+  bold?: boolean;
 }
 
 export interface ToolStyle {
   color: string;
   width: number;
+  /** 文本工具专属：字体族（空 = 默认栈） */
+  font?: string;
+  /** 文本工具专属：字号（逻辑像素） */
+  size?: number;
+  /** 文本工具专属：加粗 */
+  bold?: boolean;
 }
 
 export type Phase =

@@ -39,7 +39,7 @@ export const CUSTOM_WIDTH_MAX = 20;
 export const HIGHLIGHTER_ALPHA = 0.4;
 
 /** 各工具默认样式：默认颜色互异；样式按工具独立记忆（切工具互不覆盖）。
- *  width 为逻辑像素：text 映射字号档、mosaic 映射块尺寸档。 */
+ *  width 为逻辑像素：text 已由 size 独立控字号（width 仅保留兼容），mosaic 映射块尺寸档。 */
 export const TOOL_DEFAULT_STYLES: Record<ToolKind, ToolStyle> = {
   rect: { color: '#E8424C', width: 4 },
   ellipse: { color: '#7C4DFF', width: 4 },
@@ -47,9 +47,24 @@ export const TOOL_DEFAULT_STYLES: Record<ToolKind, ToolStyle> = {
   pen: { color: '#17B26A', width: 4 },
   highlighter: { color: '#FFE44D', width: 16 },
   mosaic: { color: '#9AA4B2', width: 4 },
-  text: { color: '#1273EB', width: 4 },
+  text: { color: '#1273EB', width: 4, size: 18, bold: false, font: '' },
   step: { color: '#D6336C', width: 4 },
 };
+
+/** 文本工具字体族选项（value 为 CSS font-family 值，空 = 默认栈） */
+export const FONT_OPTIONS: { label: string; value: string }[] = [
+  { label: '默认', value: '' },
+  { label: '微软雅黑', value: 'Microsoft YaHei' },
+  { label: '宋体', value: 'SimSun' },
+  { label: '黑体', value: 'SimHei' },
+  { label: '楷体', value: 'KaiTi' },
+  { label: '仿宋', value: 'FangSong' },
+  { label: '等宽', value: 'Consolas' },
+  { label: 'Arial', value: 'Arial' },
+];
+
+/** 文本工具字号选项（逻辑像素） */
+export const TEXT_SIZES: number[] = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64, 72];
 
 // ---------- 自定义光标（白色高亮 + 1px 黑描边，压暗蒙版上高可见） ----------
 // data URI 中 # 须转义为 %23；SVG 属性用单引号，避免与 CSS url("...") 冲突。

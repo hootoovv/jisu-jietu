@@ -30,7 +30,6 @@
     badgePosition,
     clampRect,
     dist,
-    fontSizeForWidth,
     hitTestAnnotation,
     hitTestWindows,
     inRect,
@@ -117,11 +116,18 @@
   let styles = $state<Record<ToolKind, ToolStyle>>({ ...TOOL_DEFAULT_STYLES });
 
   // 工具条样式源：工具激活时为该工具默认样式；标注选中时为该对象当前样式
+  // （文本上下文附带 font/size/bold，供字体设置弹层显示与修改）
   const currentStyle = $derived(
     tool
       ? styles[tool]
       : selectedAnnotation
-        ? { color: selectedAnnotation.color, width: selectedAnnotation.width }
+        ? {
+            color: selectedAnnotation.color,
+            width: selectedAnnotation.width,
+            font: selectedAnnotation.font,
+            size: selectedAnnotation.size,
+            bold: selectedAnnotation.bold,
+          }
         : { color: '#E8424C', width: 4 },
   );
 
@@ -165,8 +171,10 @@
 
   const CURSOR_BY_CORNER = ['nwse-resize', 'nesw-resize', 'nwse-resize', 'nesw-resize'];
 
+  // 文本编辑中也保留工具条：字体/字号/加粗/颜色可就地调整（TextEditor 对工具条
+  // 的 blur 做了豁免，点回编辑器继续输入）
   const showToolbar = $derived(
-    !!selection && phase !== 'loading' && phase !== 'dragSelect' && phase !== 'textEditing' && !busy,
+    !!selection && phase !== 'loading' && phase !== 'dragSelect' && !busy,
   );
   const showBadge = $derived(phase === 'dragSelect' || phase === 'adjust');
 
@@ -324,6 +332,7 @@
       // 无工具：标注对象编辑优先于选区操作
       const ahi = annHandleHitIndex(p);
       if (ahi !== null && selectedAnnotation) {
+        cursor = CURSOR_BY_CORNER[ahi]; // 角手柄斜向双箭头，按下即反馈
         drag = {
           mode: 'annResize',
           startPt: p,
@@ -338,6 +347,7 @@
         const hit = hitAnnotationTopmost(p);
         if (hit) {
           selectedAnn = hit.id;
+          cursor = 'move'; // 按下即进入移动语义
           drag = {
             mode: 'annMove',
             startPt: p,
@@ -373,6 +383,11 @@
 
     if (drag) {
       drag.moved = drag.moved || dist(drag.startPt, p) > CLICK_SLOP_PX;
+      // 拖拽期间的光标即时反馈（悬停分支不会执行）
+      if (drag.mode === 'annMove') cursor = 'move';
+      else if (drag.mode === 'annResize' && drag.corner !== undefined) {
+        cursor = CURSOR_BY_CORNER[drag.corner];
+      }
       if (drag.mode === 'select' && !drawing) {
         selection = clampRect(normalizeRect(drag.startPt, p), virtual, MIN_SELECTION);
       } else if (drag.mode === 'move') {
@@ -387,8 +402,8 @@
         const anchor = rectCorners(annBBox(drag.annSnapshot, dpr))[(drag.corner + 2) % 4];
         let scaled = resizeAnnotation(drag.annSnapshot, anchor, drag.startPt, p);
         if (scaled.kind === 'text' && scaled.rect) {
-          // 字号随比例变化，包围盒须按新字号重测
-          const m = measureTextSize(scaled.text ?? '', scaled.width, dpr);
+          // 字号随比例变化，包围盒须按新字体设置重测
+          const m = measureTextSize(scaled.text ?? '', scaled, dpr);
           scaled = { ...scaled, rect: { ...scaled.rect, w: m.w, h: m.h } };
         }
         annotations = annotations.map((a) => (a.id === drag.annId ? scaled : a));
@@ -407,9 +422,13 @@
       cursor = CURSOR_CROSSHAIR;
     } else {
       hover = null;
+      const ahi = annHandleHitIndex(p);
       const hi = handleHitIndex(p);
-      if (hi !== null) cursor = CURSOR_BY_CORNER[hi];
-      else if (!tool && hitAnnotationTopmost(p)) cursor = 'pointer';
+      if (ahi !== null) cursor = CURSOR_BY_CORNER[ahi];
+      else if (hi !== null) cursor = CURSOR_BY_CORNER[hi];
+      else if (!tool && selectedAnnotation && inRect(annBBox(selectedAnnotation, dpr), p)) {
+        cursor = 'move'; // 已选中对象整体可拖
+      } else if (!tool && hitAnnotationTopmost(p)) cursor = 'pointer';
       else if (selection && inRect(selection, p) && !tool) cursor = 'move';
       else cursor = tool ? TOOL_CURSORS[tool] : CURSOR_CROSSHAIR;
     }
@@ -544,7 +563,7 @@
       const st = styles.text;
       annSeq += 1;
       // 包围盒按实际字体测量（对象化选中/缩放的几何依据）
-      const m = measureTextSize(text, st.width, dpr);
+      const m = measureTextSize(text, st, dpr);
       annotations = [
         ...annotations,
         {
@@ -552,6 +571,9 @@
           kind: 'text',
           color: st.color,
           width: st.width,
+          font: st.font,
+          size: st.size ?? 18,
+          bold: st.bold,
           text,
           rect: { x: textEdit.x, y: textEdit.y, w: m.w, h: m.h },
         },
@@ -574,6 +596,7 @@
   }
 
   function pickTool(t: ToolKind | null) {
+    if (phase === 'textEditing') return; // 编辑中不允许切工具（先提交/取消）
     tool = t;
     selectedAnn = null; // 进入绘制模式，退出对象编辑
     // 立即切换光标，不等首次移动
@@ -585,7 +608,7 @@
     if (selectedAnnotation) {
       let next: Annotation = { ...selectedAnnotation, ...patch };
       if (next.kind === 'text' && next.rect) {
-        const m = measureTextSize(next.text ?? '', next.width, dpr);
+        const m = measureTextSize(next.text ?? '', next, dpr);
         next = { ...next, rect: { ...next.rect, w: m.w, h: m.h } };
       }
       annotations = annotations.map((a) => (a.id === next.id ? next : a));
@@ -614,7 +637,7 @@
   }
 
   async function confirmCopy() {
-    if (!selection || busy) return;
+    if (!selection || busy || phase === 'textEditing') return;
     busy = true;
     const t0 = performance.now();
     try {
@@ -664,7 +687,7 @@
   }
 
   function closeSession() {
-    if (!busy) void endSession('cancelled');
+    if (!busy && phase !== 'textEditing') void endSession('cancelled');
   }
 </script>
 
@@ -742,6 +765,7 @@
           {tool}
           style={currentStyle}
           styleEnabled={!!tool || selectedAnn !== null}
+          textMode={tool === 'text' || selectedAnnotation?.kind === 'text'}
           {busy}
           onundo={undo}
           ontool={pickTool}
@@ -760,7 +784,9 @@
         x={toL(textEdit.x)}
         y={toL(textEdit.y)}
         color={styles.text.color}
-        fontSize={fontSizeForWidth(styles.text.width)}
+        fontSize={styles.text.size ?? 18}
+        font={styles.text.font}
+        bold={styles.text.bold}
         maxWidth={maxW}
         oncommit={onTextCommit}
         oncancel={onTextCancel}

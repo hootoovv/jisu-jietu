@@ -305,14 +305,21 @@ export function moveAnnotation(a: Annotation, dx: number, dy: number): Annotatio
 }
 
 /**
- * 以包围盒对角锚点等比缩放标注（基于拖拽起始快照计算，幂等无漂移）。
- * scale 钳制在 [0.15, 4]；text/step 的 width（字号/标号尺寸档）随比例同步缩放。
+ * 以包围盒对角锚点缩放标注（基于拖拽起始快照计算，幂等无漂移）。
+ * **任意宽高比**：x/y 两轴独立缩放（各钳制 [0.1, 8]）；文本字号与标号尺寸
+ * 取两轴较大比例；标记笔/马赛克的笔宽（高亮厚度/块径）随较大比例同步缩放，
+ * 使效果按新尺寸重新施加到覆盖区域。
  */
 export function resizeAnnotation(a: Annotation, anchor: Pt, from: Pt, to: Pt): Annotation {
-  const fd = dist(from, anchor);
-  if (fd < 4) return a;
-  const s = Math.min(4, Math.max(0.15, dist(to, anchor) / fd));
-  const sc = (v: number, o: number) => o + (v - o) * s;
+  const fdx = from.x - anchor.x;
+  const fdy = from.y - anchor.y;
+  if (Math.hypot(fdx, fdy) < 4) return a;
+  const clampS = (v: number) => Math.min(8, Math.max(0.1, v));
+  const sx = clampS(fdx === 0 ? 1 : (to.x - anchor.x) / fdx);
+  const sy = clampS(fdy === 0 ? 1 : (to.y - anchor.y) / fdy);
+  const sMax = Math.max(sx, sy);
+  const scx = (v: number) => anchor.x + (v - anchor.x) * sx;
+  const scy = (v: number) => anchor.y + (v - anchor.y) * sy;
   switch (a.kind) {
     case 'rect':
     case 'ellipse':
@@ -320,10 +327,10 @@ export function resizeAnnotation(a: Annotation, anchor: Pt, from: Pt, to: Pt): A
         ? {
             ...a,
             rect: {
-              x: sc(a.rect.x, anchor.x),
-              y: sc(a.rect.y, anchor.y),
-              w: Math.max(4, a.rect.w * s),
-              h: Math.max(4, a.rect.h * s),
+              x: scx(a.rect.x),
+              y: scy(a.rect.y),
+              w: Math.max(4, a.rect.w * sx),
+              h: Math.max(4, a.rect.h * sy),
             },
           }
         : a;
@@ -331,8 +338,13 @@ export function resizeAnnotation(a: Annotation, anchor: Pt, from: Pt, to: Pt): A
       return a.rect
         ? {
             ...a,
-            width: Math.min(20, Math.max(1, a.width * s)),
-            rect: { x: sc(a.rect.x, anchor.x), y: sc(a.rect.y, anchor.y), w: Math.max(4, a.rect.w * s), h: Math.max(4, a.rect.h * s) },
+            size: Math.min(120, Math.max(8, (a.size ?? 18) * sMax)),
+            rect: {
+              x: scx(a.rect.x),
+              y: scy(a.rect.y),
+              w: Math.max(4, a.rect.w * sMax),
+              h: Math.max(4, a.rect.h * sMax),
+            },
           }
         : a;
     case 'arrow':
@@ -340,25 +352,32 @@ export function resizeAnnotation(a: Annotation, anchor: Pt, from: Pt, to: Pt): A
         ? {
             ...a,
             line: {
-              x1: sc(a.line.x1, anchor.x),
-              y1: sc(a.line.y1, anchor.y),
-              x2: sc(a.line.x2, anchor.x),
-              y2: sc(a.line.y2, anchor.y),
+              x1: scx(a.line.x1),
+              y1: scy(a.line.y1),
+              x2: scx(a.line.x2),
+              y2: scy(a.line.y2),
             },
           }
         : a;
     case 'pen':
+      return a.points
+        ? { ...a, points: a.points.map((q) => ({ x: scx(q.x), y: scy(q.y) })) }
+        : a;
     case 'highlighter':
     case 'mosaic':
       return a.points
-        ? { ...a, points: a.points.map((q) => ({ x: sc(q.x, anchor.x), y: sc(q.y, anchor.y) })) }
+        ? {
+            ...a,
+            width: Math.min(40, Math.max(1, a.width * sMax)),
+            points: a.points.map((q) => ({ x: scx(q.x), y: scy(q.y) })),
+          }
         : a;
     case 'step':
       return a.rect
         ? {
             ...a,
-            width: Math.min(20, Math.max(1, a.width * s)),
-            rect: { x: sc(a.rect.x, anchor.x), y: sc(a.rect.y, anchor.y), w: 0, h: 0 },
+            width: Math.min(20, Math.max(1, a.width * sMax)),
+            rect: { x: scx(a.rect.x), y: scy(a.rect.y), w: 0, h: 0 },
           }
         : a;
   }

@@ -4,7 +4,14 @@
    * 撤销 | 七工具 | 颜色(8×2 色板+自定义) | 线宽(5 档+自定义滑杆) | 保存 复制 关闭
    */
   import type { ToolKind, ToolStyle } from '../lib/types';
-  import { CUSTOM_WIDTH_MAX, CUSTOM_WIDTH_MIN, PRESET_COLORS, PRESET_WIDTHS } from '../lib/constants';
+  import {
+    CUSTOM_WIDTH_MAX,
+    CUSTOM_WIDTH_MIN,
+    FONT_OPTIONS,
+    PRESET_COLORS,
+    PRESET_WIDTHS,
+    TEXT_SIZES,
+  } from '../lib/constants';
 
   interface Props {
     hasUndo: boolean;
@@ -12,6 +19,8 @@
     style: ToolStyle;
     styleEnabled: boolean;
     busy: boolean;
+    /** 文本上下文（文本工具激活或选中文本标注）：线宽控件替换为字体设置 */
+    textMode: boolean;
     onundo: () => void;
     ontool: (t: ToolKind | null) => void;
     onstyle: (patch: Partial<ToolStyle>) => void;
@@ -26,6 +35,7 @@
     style,
     styleEnabled,
     busy,
+    textMode,
     onundo,
     ontool,
     onstyle,
@@ -45,7 +55,7 @@
     { kind: 'step', label: '标号', title: '数字标号' },
   ];
 
-  let popover = $state<'color' | 'width' | null>(null);
+  let popover = $state<'color' | 'width' | 'font' | null>(null);
   /** 弹层向上弹出（工具条贴近屏幕下沿时，向下展开会被裁掉） */
   let popoverAbove = $state(false);
   let customColor = $state('#E8424C');
@@ -53,7 +63,7 @@
   /** 色板弹层约 130px 高（2 行色格 + 自定义行），不足则向上弹 */
   const POPOVER_SPACE_NEED = 130;
 
-  function togglePopover(which: 'color' | 'width', e: MouseEvent) {
+  function togglePopover(which: 'color' | 'width' | 'font', e: MouseEvent) {
     if (popover === which) {
       popover = null;
       return;
@@ -181,42 +191,91 @@
     {/if}
   </div>
 
-  <!-- 线宽 -->
-  <div class="pop-wrap">
-    <button
-      class="tb-btn"
-      class:disabled={!styleEnabled}
-      title="线宽"
-      disabled={!styleEnabled}
-      onclick={(e) => styleEnabled && togglePopover('width', e)}
-    >
-      <span class="dot" style:width={`${style.width * 1.1 + 2}px`} style:height={`${style.width * 1.1 + 2}px`}></span>
-    </button>
-    {#if popover === 'width'}
-      <div class="popover width-pop" class:above={popoverAbove} role="presentation" onpointerdown={stop}>
-        <div class="widths">
-          {#each PRESET_WIDTHS as w (w)}
-            <button class="wcell" class:selected={style.width === w} onclick={() => pickWidth(w)}>
-              <span class="dot" style:width={`${w * 1.1 + 2}px`} style:height={`${w * 1.1 + 2}px`}></span>
-              <span class="wlabel">{w}</span>
-            </button>
-          {/each}
+  <!-- 线宽（非文本上下文）/ 字体设置（文本上下文：字体/字号/加粗） -->
+  {#if textMode}
+    <div class="pop-wrap">
+      <button
+        class="tb-btn"
+        class:disabled={!styleEnabled}
+        title="字体设置"
+        disabled={!styleEnabled}
+        onclick={(e) => styleEnabled && togglePopover('font', e)}
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 19 10 5h2l5 14M7.5 14h7M14 19l2-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
+      {#if popover === 'font'}
+        <div class="popover font-pop" class:above={popoverAbove} role="presentation" onpointerdown={stop}>
+          <label class="frow">
+            <span class="flabel">字体</span>
+            <select
+              value={style.font ?? ''}
+              onchange={(e) => onstyle({ font: (e.currentTarget as HTMLSelectElement).value })}
+            >
+              {#each FONT_OPTIONS as o (o.value)}
+                <option value={o.value}>{o.label}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="frow">
+            <span class="flabel">大小</span>
+            <select
+              value={String(style.size ?? 18)}
+              onchange={(e) => onstyle({ size: Number((e.currentTarget as HTMLSelectElement).value) })}
+            >
+              {#each TEXT_SIZES as s (s)}
+                <option value={String(s)}>{s}</option>
+              {/each}
+            </select>
+          </label>
+          <div class="frow">
+            <span class="flabel">字重</span>
+            <button
+              class="wbtn"
+              class:active={!!style.bold}
+              title="加粗"
+              onclick={() => onstyle({ bold: !style.bold })}
+            >B</button>
+          </div>
         </div>
-        <div class="slider-row">
-          <span class="slabel">自定义</span>
-          <input
-            type="range"
-            min={CUSTOM_WIDTH_MIN}
-            max={CUSTOM_WIDTH_MAX}
-            step="1"
-            value={style.width}
-            oninput={(e) => pickWidth(Number((e.target as HTMLInputElement).value))}
-          />
-          <span class="sval">{style.width}px</span>
+      {/if}
+    </div>
+  {:else}
+    <div class="pop-wrap">
+      <button
+        class="tb-btn"
+        class:disabled={!styleEnabled}
+        title="线宽"
+        disabled={!styleEnabled}
+        onclick={(e) => styleEnabled && togglePopover('width', e)}
+      >
+        <span class="dot" style:width={`${style.width * 1.1 + 2}px`} style:height={`${style.width * 1.1 + 2}px`}></span>
+      </button>
+      {#if popover === 'width'}
+        <div class="popover width-pop" class:above={popoverAbove} role="presentation" onpointerdown={stop}>
+          <div class="widths">
+            {#each PRESET_WIDTHS as w (w)}
+              <button class="wcell" class:selected={style.width === w} onclick={() => pickWidth(w)}>
+                <span class="dot" style:width={`${w * 1.1 + 2}px`} style:height={`${w * 1.1 + 2}px`}></span>
+                <span class="wlabel">{w}</span>
+              </button>
+            {/each}
+          </div>
+          <div class="slider-row">
+            <span class="slabel">自定义</span>
+            <input
+              type="range"
+              min={CUSTOM_WIDTH_MIN}
+              max={CUSTOM_WIDTH_MAX}
+              step="1"
+              value={style.width}
+              oninput={(e) => pickWidth(Number((e.target as HTMLInputElement).value))}
+            />
+            <span class="sval">{style.width}px</span>
+          </div>
         </div>
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </div>
+  {/if}
 
   <span class="sep"></span>
 
@@ -442,5 +501,49 @@
     color: #1f2937;
     width: 34px;
     font-family: Consolas, monospace;
+  }
+
+  .frow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 3px 0;
+  }
+
+  .flabel {
+    font-size: 12px;
+    color: #6b7280;
+    white-space: nowrap;
+  }
+
+  .frow select {
+    min-width: 110px;
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    background: #fff;
+    color: #1f2937;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .wbtn {
+    width: 34px;
+    height: 26px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    background: #fff;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .wbtn.active {
+    background: #3d82f6;
+    border-color: #3d82f6;
+    color: #fff;
   }
 </style>
