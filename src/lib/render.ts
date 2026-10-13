@@ -12,6 +12,7 @@ import {
   arrowHead,
   contrastColor,
   fontSizeForWidth,
+  isScalableKind,
   mosaicBlockForWidth,
   stepNumberMap,
 } from './geometry';
@@ -113,18 +114,21 @@ export function drawAnnotations(ctx: CanvasRenderingContext2D, opts: AnnotateOpt
       ctx.setLineDash([5 * opts.dpr, 4 * opts.dpr]);
       ctx.strokeRect(x, y, bb.w, bb.h);
       ctx.setLineDash([]);
-      const hs = 7 * opts.dpr; // 手柄边长
-      for (const [cx, cy] of [
-        [x, y],
-        [x + bb.w, y],
-        [x + bb.w, y + bb.h],
-        [x, y + bb.h],
-      ]) {
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = '#3d82f6';
-        ctx.lineWidth = 1.5 * opts.dpr;
-        ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs);
-        ctx.strokeRect(cx - hs / 2, cy - hs / 2, hs, hs);
+      // 标记笔/马赛克禁止改尺寸：只画虚线框，不画角手柄
+      if (isScalableKind(sel.kind)) {
+        const hs = 7 * opts.dpr; // 手柄边长
+        for (const [cx, cy] of [
+          [x, y],
+          [x + bb.w, y],
+          [x + bb.w, y + bb.h],
+          [x, y + bb.h],
+        ]) {
+          ctx.fillStyle = '#fff';
+          ctx.strokeStyle = '#3d82f6';
+          ctx.lineWidth = 1.5 * opts.dpr;
+          ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs);
+          ctx.strokeRect(cx - hs / 2, cy - hs / 2, hs, hs);
+        }
       }
       ctx.restore();
     }

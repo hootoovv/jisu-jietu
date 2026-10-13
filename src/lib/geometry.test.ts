@@ -13,6 +13,7 @@ import {
   hitTestAnnotation,
   hitTestWindows,
   inRect,
+  isScalableKind,
   mosaicBlockForWidth,
   moveAnnotation,
   moveRect,
@@ -339,5 +340,18 @@ describe('标注对象编辑：moveAnnotation / resizeAnnotation', () => {
     };
     const out = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 50, y: 0 }, { x: 100, y: 0 }) as Annotation;
     expect(out.width).toBe(16);
+  });
+});
+
+describe('isScalableKind 效果类标注禁改尺寸', () => {
+  it('标记笔与马赛克不可缩放，其余可', () => {
+    expect(isScalableKind('highlighter')).toBe(false);
+    expect(isScalableKind('mosaic')).toBe(false);
+    expect(isScalableKind('rect')).toBe(true);
+    expect(isScalableKind('ellipse')).toBe(true);
+    expect(isScalableKind('arrow')).toBe(true);
+    expect(isScalableKind('pen')).toBe(true);
+    expect(isScalableKind('text')).toBe(true);
+    expect(isScalableKind('step')).toBe(true);
   });
 });

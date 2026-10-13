@@ -33,6 +33,7 @@
     hitTestAnnotation,
     hitTestWindows,
     inRect,
+    isScalableKind,
     moveAnnotation,
     moveRect,
     normalizeRect,
@@ -298,9 +299,10 @@
     return null;
   }
 
-  /** 选中标注的包围盒四角手柄命中（与选区手柄同一手感）。 */
+  /** 选中标注的包围盒四角手柄命中（与选区手柄同一手感）；
+   *  标记笔/马赛克不允许改尺寸，无手柄。 */
   function annHandleHitIndex(p: Pt): number | null {
-    if (!selectedAnnotation) return null;
+    if (!selectedAnnotation || !isScalableKind(selectedAnnotation.kind)) return null;
     const corners = rectCorners(annBBox(selectedAnnotation, dpr));
     const slack = (HANDLE_SIZE / 2 + 4) * dpr;
     for (let i = 0; i < 4; i++) {

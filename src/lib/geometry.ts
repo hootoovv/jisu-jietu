@@ -7,7 +7,7 @@
  *   函数本身与单位无关，由调用方保证一致。
  */
 
-import type { Annotation, Pt, Rect } from './types';
+import type { Annotation, Pt, Rect, ToolKind } from './types';
 
 /** 反向拖拽归一化为左上-右下表示。 */
 export function normalizeRect(a: Pt, b: Pt): Rect {
@@ -174,6 +174,12 @@ export function contrastColor(hex: string): string {
 }
 
 // ---------- 标注对象编辑（对象化：命中 / 包围盒 / 移动 / 缩放） ----------
+
+/** 标记笔/马赛克为效果类标注（高亮/像素化依附于底层画面）：禁止改尺寸，
+ *  仅允许移动与改笔宽（厚度/块径走工具条线宽控件）。 */
+export function isScalableKind(kind: ToolKind): boolean {
+  return kind !== 'highlighter' && kind !== 'mosaic';
+}
 
 /** 点到线段的最近距离。 */
 export function distToSegment(p: Pt, a: Pt, b: Pt): number {
