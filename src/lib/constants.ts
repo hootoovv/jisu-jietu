@@ -61,16 +61,17 @@ export const CURSOR_CROSSHAIR =
 const cursorOf = (svg: string, hx: number, hy: number, fb = 'crosshair') =>
   `url("data:image/svg+xml;utf8,${svg}") ${hx} ${hy}, ${fb}`;
 
-/** 画笔：斜向细线笔触（笔尖在左下） */
+/** 画笔：斜向细线笔触，左下热点处黑色「笔头」圆点（白描边勾轮廓，
+ *  深浅背景均可见），点即落笔精确位置 */
 export const CURSOR_PEN = cursorOf(
-  "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><g stroke='%23000' stroke-width='4' stroke-linecap='round'><line x1='5' y1='19' x2='17' y2='7'/></g><g stroke='%23fff' stroke-width='2' stroke-linecap='round'><line x1='5' y1='19' x2='17' y2='7'/></g></svg>",
+  "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><g stroke='%23000' stroke-width='4' stroke-linecap='round'><line x1='5' y1='19' x2='17' y2='7'/></g><g stroke='%23fff' stroke-width='2' stroke-linecap='round'><line x1='5' y1='19' x2='17' y2='7'/></g><circle cx='5' cy='19' r='2.6' fill='%23000' stroke='%23fff' stroke-width='1'/></svg>",
   5,
   19,
 );
 
-/** 标记笔：斜向粗线笔触（笔尖在左下） */
+/** 标记笔：斜向粗线笔触（比画笔更粗），左下热点处黑色「笔头」圆点 */
 export const CURSOR_MARKER = cursorOf(
-  "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><g stroke='%23000' stroke-width='7' stroke-linecap='round'><line x1='6' y1='18' x2='16' y2='8'/></g><g stroke='%23fff' stroke-width='4' stroke-linecap='round'><line x1='6' y1='18' x2='16' y2='8'/></g></svg>",
+  "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><g stroke='%23000' stroke-width='9' stroke-linecap='round'><line x1='6' y1='18' x2='16' y2='8'/></g><g stroke='%23fff' stroke-width='5.5' stroke-linecap='round'><line x1='6' y1='18' x2='16' y2='8'/></g><circle cx='6' cy='18' r='3' fill='%23000' stroke='%23fff' stroke-width='1'/></svg>",
   6,
   18,
 );

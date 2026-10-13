@@ -124,21 +124,16 @@
       {:else if t.kind === 'pen'}
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 20c1-4 2-6 5-9l8-8 4 4-8 8c-3 3-5 4-9 5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
       {:else if t.kind === 'highlighter'}
-        <svg viewBox="0 0 24 24" width="18" height="18">
-          <path d="M6 21l1.4-4.2 8.1-8.1 2.8 2.8-8.1 8.1L6 21z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-          <path d="M14.4 4.4l2-2c.5-.5 1.3-.5 1.8 0l3.4 3.4c.5.5.5 1.3 0 1.8l-2 2-5.2-5.2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-        </svg>
+        <!-- 标记笔 = 画笔图标同构的「变胖」版：笔杆/笔头同步加粗（stroke 2→4） -->
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 20c1-4 2-6 5-9l8-8 4 4-8 8c-3 3-5 4-9 5z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" /></svg>
       {:else if t.kind === 'mosaic'}
+        <!-- 马赛克 = 2x2 灰白相间棋盘格；外框 currentColor 保证亮/暗主题均可见 -->
         <svg viewBox="0 0 24 24" width="18" height="18">
-          <rect x="4" y="4" width="5" height="5" fill="currentColor" />
-          <rect x="10" y="4" width="5" height="5" fill="none" stroke="currentColor" />
-          <rect x="16" y="4" width="4" height="5" fill="currentColor" />
-          <rect x="4" y="10" width="5" height="5" fill="none" stroke="currentColor" />
-          <rect x="10" y="10" width="5" height="5" fill="currentColor" />
-          <rect x="16" y="10" width="4" height="5" fill="none" stroke="currentColor" />
-          <rect x="4" y="16" width="5" height="4" fill="currentColor" />
-          <rect x="10" y="16" width="5" height="4" fill="none" stroke="currentColor" />
-          <rect x="16" y="16" width="4" height="4" fill="currentColor" />
+          <rect x="4" y="4" width="8" height="8" fill="#9CA3AF" />
+          <rect x="12" y="4" width="8" height="8" fill="#FFFFFF" />
+          <rect x="4" y="12" width="8" height="8" fill="#FFFFFF" />
+          <rect x="12" y="12" width="8" height="8" fill="#9CA3AF" />
+          <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" />
         </svg>
       {:else if t.kind === 'text'}
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 5h14M12 5v14M9 19h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
