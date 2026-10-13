@@ -122,10 +122,10 @@
 
 <main class="panel">
   <header>
-    <div class="logo">Jet</div>
+    <div class="logo">极速</div>
     <div>
       <h1>极速截图</h1>
-      <p class="sub">v1.0.0 · Rust + Tauri 2 + Svelte 5</p>
+      <p class="sub">v1.5.0 · AI赋能，模仿 QQ 截图功能的轻量截图工具。</p>
     </div>
   </header>
 
@@ -193,7 +193,7 @@
   }
 
   .panel {
-    max-width: 420px;
+    max-width: 520px;
     margin: 0 auto;
     padding: 22px 24px 28px;
     color: #23272f;
