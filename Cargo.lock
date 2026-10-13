@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "jetsnap-win"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "arboard",
  "image",
@@ -1896,7 +1896,7 @@ dependencies = [
 
 [[package]]
 name = "jisu-jietu"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "jetsnap-win",
  "serde",
