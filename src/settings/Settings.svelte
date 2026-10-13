@@ -125,7 +125,7 @@
     <div class="logo">极速</div>
     <div>
       <h1>极速截图</h1>
-      <p class="sub">v1.5.0 · AI赋能，模仿 QQ 截图功能的轻量截图工具。</p>
+      <p class="sub">v2.0.0 · AI赋能，模仿 QQ 截图功能的轻量截图工具。</p>
     </div>
   </header>
 
