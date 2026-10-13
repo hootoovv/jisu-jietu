@@ -1,5 +1,6 @@
 //! snapshot:// 自定义协议（开发计划 3.3-⑤）：
-//! 4K BGRA 约 33MB，绝不能走 invoke 序列化通道。此处从会话内存直出 JPEG。
+//! 4K BGRA 约 33MB，绝不能走 invoke 序列化通道。此处从会话内存直出
+//! 32bpp BMP（BGRA 原样透传，仅文件头封装——显示路径零编码成本）。
 
 use tauri::http::Response;
 use tauri::{Manager, UriSchemeContext};
@@ -14,18 +15,18 @@ pub fn handle_snapshot<R: tauri::Runtime>(
     let id = snapshot_id_from_uri(&uri);
 
     let state = ctx.app_handle().state::<AppState>();
-    let jpeg = {
+    let display_bmp = {
         let guard = state.session.lock().unwrap();
         match guard.as_ref() {
-            Some(s) if Some(s.id) == id => Some(s.jpeg.clone()),
+            Some(s) if Some(s.id) == id => Some(s.display_bmp.clone()),
             _ => None,
         }
     };
 
-    match jpeg {
+    match display_bmp {
         Some(bytes) => Response::builder()
             .status(200)
-            .header("Content-Type", "image/jpeg")
+            .header("Content-Type", "image/bmp")
             .header("Cache-Control", "no-store")
             // 前端 <img crossorigin="anonymous">（马赛克导出需读像素，画布不能被跨域污染），
             // 故必须应答 CORS 头，否则图片直接加载失败

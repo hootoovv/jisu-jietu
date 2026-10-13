@@ -24,6 +24,12 @@ pub fn capture_virtual_screen() -> Result<CaptureResult, String> {
     Err("屏幕捕获仅支持 Windows".into())
 }
 
+/// 仅取虚拟屏几何（无 BitBlt），预建覆盖窗口定位用。
+#[cfg(not(windows))]
+pub fn virtual_screen_rect() -> Result<PhysRect, String> {
+    Err("屏幕捕获仅支持 Windows".into())
+}
+
 #[cfg(windows)]
 mod win_impl {
     use super::*;
@@ -64,6 +70,22 @@ mod win_impl {
             monitors,
             windows,
         })
+    }
+
+    /// 仅取虚拟屏几何（无 BitBlt），预建覆盖窗口定位用。
+    pub fn virtual_screen_rect() -> Result<PhysRect, String> {
+        let (vx, vy, vw, vh) = unsafe {
+            (
+                GetSystemMetrics(SM_XVIRTUALSCREEN),
+                GetSystemMetrics(SM_YVIRTUALSCREEN),
+                GetSystemMetrics(SM_CXVIRTUALSCREEN),
+                GetSystemMetrics(SM_CYVIRTUALSCREEN),
+            )
+        };
+        if vw <= 0 || vh <= 0 {
+            return Err(format!("虚拟屏几何非法: origin=({vx},{vy}) size={vw}x{vh}"));
+        }
+        Ok(PhysRect::new(vx, vy, vw as u32, vh as u32))
     }
 
     unsafe fn bitblt_virtual_screen(vx: i32, vy: i32, vw: i32, vh: i32) -> Result<Vec<u8>, String> {
@@ -199,4 +221,4 @@ mod win_impl {
 }
 
 #[cfg(windows)]
-pub use win_impl::capture_virtual_screen;
+pub use win_impl::{capture_virtual_screen, virtual_screen_rect};

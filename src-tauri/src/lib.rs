@@ -57,6 +57,13 @@ pub fn run() {
                 eprintln!("[jisu-jietu] 热键注册失败（{combo}）: {e}");
             }
             tray::create(handle)?;
+            // 预建隐藏覆盖窗口：把 WebView2 建进程 + 页面加载的冷启动成本从
+            // 首次热键路径移到应用启动期（几何在每次会话 ensure_overlay 时重设）
+            if let Ok(vr) = jetsnap_win::capture::virtual_screen_rect() {
+                if let Err(e) = overlay::create_overlay(handle, vr) {
+                    eprintln!("[jisu-jietu] 预建覆盖窗口失败（退化为热键时创建）: {e}");
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

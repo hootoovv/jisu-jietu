@@ -1,7 +1,7 @@
 //! 位图裁剪 / 合成 / 编码（纯逻辑，跨平台可测）。
 //!
 //! 数据约定：所有 BGRA/RGBA 缓冲均为**自顶向下**行序。
-//! - 显示路径：虚拟屏 BGRA → JPEG（q92）→ `snapshot://` 协议；
+//! - 显示路径：虚拟屏 BGRA → 32bpp BMP 头封装（零像素转换）→ `snapshot://` 协议；
 //! - 导出路径：虚拟屏 BGRA 按选区裁剪 → 与标注层 PNG 逐像素合成 → PNG/JPEG/剪贴板。
 
 use crate::PhysRect;
@@ -108,11 +108,52 @@ pub fn encode_jpeg(rgba: &[u8], w: u32, h: u32, quality: u8) -> Result<Vec<u8>, 
     Ok(out)
 }
 
-/// 全虚拟屏 BGRA → JPEG（显示路径，q92）。
-pub fn bgra_to_jpeg(bgra: &[u8], w: u32, h: u32, quality: u8) -> Result<Vec<u8>, String> {
-    let mut rgba = bgra.to_vec();
-    bgra_to_rgba_inplace(&mut rgba);
-    encode_jpeg(&rgba, w, h, quality)
+/// 全虚拟屏 BGRA → 32bpp BMP（显示路径）。
+///
+/// BGRA 内存布局与 32bpp BI_BITFIELDS BMP 逐字节一致，只需拼 122 字节
+/// 文件头，无逐像素转换、无压缩编码——JPEG 编码（纯 Rust 实现）曾是
+/// 「热键→蒙版」时延的最大单项。alpha 掩码置 0：GDI 捕获的 alpha 字节
+/// 不可信，按不透明处理；负高度表示自顶向下行序，免去翻行。
+pub fn bgra_to_bmp(bgra: &[u8], w: u32, h: u32) -> Result<Vec<u8>, String> {
+    let expected = w as usize * h as usize * 4;
+    if bgra.len() != expected {
+        return Err(format!("BGRA 长度 {} 与 {}x{} 不符", bgra.len(), w, h));
+    }
+
+    const FILE_HEADER: usize = 14;
+    const INFO_HEADER: usize = 108; // BITMAPV4HEADER
+    let payload = expected;
+    let mut out = Vec::with_capacity(FILE_HEADER + INFO_HEADER + payload);
+
+    // BITMAPFILEHEADER
+    out.extend_from_slice(b"BM");
+    out.extend_from_slice(&((FILE_HEADER + INFO_HEADER + payload) as u32).to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes()); // 保留字
+    out.extend_from_slice(&((FILE_HEADER + INFO_HEADER) as u32).to_le_bytes()); // 像素偏移
+
+    // BITMAPV4HEADER
+    out.extend_from_slice(&(INFO_HEADER as u32).to_le_bytes());
+    out.extend_from_slice(&(w as i32).to_le_bytes());
+    out.extend_from_slice(&(-(h as i32)).to_le_bytes()); // 负高度 = 自顶向下
+    out.extend_from_slice(&1u16.to_le_bytes()); // planes
+    out.extend_from_slice(&32u16.to_le_bytes()); // bpp
+    out.extend_from_slice(&3u32.to_le_bytes()); // BI_BITFIELDS
+    out.extend_from_slice(&(payload as u32).to_le_bytes());
+    out.extend_from_slice(&0i32.to_le_bytes()); // x pels/meter
+    out.extend_from_slice(&0i32.to_le_bytes()); // y pels/meter
+    out.extend_from_slice(&0u32.to_le_bytes()); // clr used
+    out.extend_from_slice(&0u32.to_le_bytes()); // clr important
+    out.extend_from_slice(&0x00FF_0000u32.to_le_bytes()); // R 掩码
+    out.extend_from_slice(&0x0000_FF00u32.to_le_bytes()); // G 掩码
+    out.extend_from_slice(&0x0000_00FFu32.to_le_bytes()); // B 掩码
+    out.extend_from_slice(&0u32.to_le_bytes()); // A 掩码 = 0（不透明）
+    out.extend_from_slice(&0u32.to_le_bytes()); // CSType
+    out.extend_from_slice(&[0u8; 36]); // endpoints
+    out.extend_from_slice(&[0u8; 12]); // gamma r/g/b
+
+    debug_assert_eq!(out.len(), FILE_HEADER + INFO_HEADER);
+    out.extend_from_slice(bgra);
+    Ok(out)
 }
 
 /// RGBA → 系统剪贴板（Windows 上经 arboard 写 CF_DIBV5/CF_DIB）。
@@ -157,6 +198,33 @@ mod tests {
         let mut buf = vec![1, 2, 3, 4, 5, 6, 7, 8]; // BGRA BGRA
         bgra_to_rgba_inplace(&mut buf);
         assert_eq!(buf, vec![3, 2, 1, 4, 7, 6, 5, 8]);
+    }
+
+    #[test]
+    fn bmp_header_and_payload() {
+        let bgra = gradient_bgra(4, 3);
+        let bmp = bgra_to_bmp(&bgra, 4, 3).unwrap();
+        assert_eq!(bmp.len(), 14 + 108 + 4 * 3 * 4);
+        assert_eq!(&bmp[0..2], b"BM");
+        let u32at = |o: usize| u32::from_le_bytes(bmp[o..o + 4].try_into().unwrap());
+        assert_eq!(u32at(2), bmp.len() as u32); // 文件长度
+        assert_eq!(u32at(10), 14 + 108); // 像素偏移
+        assert_eq!(u32at(14), 108); // V4 头长度
+        assert_eq!(u32at(18), 4); // 宽
+        assert_eq!(u32at(22) as i32, -3); // 负高度 = 自顶向下
+        assert_eq!(u16::from_le_bytes(bmp[26..28].try_into().unwrap()), 1); // planes
+        assert_eq!(u16::from_le_bytes(bmp[28..30].try_into().unwrap()), 32); // bpp
+        assert_eq!(u32at(30), 3); // BI_BITFIELDS
+        assert_eq!(u32at(54), 0x00FF_0000); // R 掩码
+        assert_eq!(u32at(58), 0x0000_FF00); // G 掩码
+        assert_eq!(u32at(62), 0x0000_00FF); // B 掩码
+        assert_eq!(u32at(66), 0); // A 掩码 = 不透明
+        assert_eq!(&bmp[122..], &bgra[..]); // 像素原样透传（BGRA 布局即 BMP 布局）
+    }
+
+    #[test]
+    fn bmp_len_mismatch_errors() {
+        assert!(bgra_to_bmp(&[0u8; 7], 4, 3).is_err());
     }
 
     #[test]

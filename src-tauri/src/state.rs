@@ -8,13 +8,13 @@ use jetsnap_win::{MonitorInfo, PhysRect, WindowInfo};
 
 use crate::settings::Settings;
 
-/// 一次截图会话的全部资源（开发计划 R-07：生命周期统一托管）。
+/// 一次截图会话的全部资源（生命周期统一托管）。
 pub struct SessionData {
     pub id: u32,
     /// 原始全虚拟屏 BGRA（自顶向下），导出用（无损）
     pub bgra: Vec<u8>,
-    /// 显示用 JPEG（q92），经 snapshot:// 协议供 <img> 加载
-    pub jpeg: Vec<u8>,
+    /// 显示用 32bpp BMP（头 + BGRA 原样透传），经 snapshot:// 协议供 <img> 加载
+    pub display_bmp: Vec<u8>,
     pub virtual_rect: PhysRect,
     pub monitors: Vec<MonitorInfo>,
     pub windows: Vec<WindowInfo>,

@@ -18,7 +18,12 @@
     revealOverlay,
     saveImage,
   } from '../lib/ipc';
-  import { composeAnnotationsPng, drawAnnotations, drawMask } from '../lib/render';
+  import {
+    composeAnnotationsPng,
+    drawAnnotations,
+    drawMask,
+    invalidateMosaicCache,
+  } from '../lib/render';
   import {
     badgePosition,
     clampRect,
@@ -144,6 +149,8 @@
 
   // ---------- 生命周期 ----------
   onMount(() => {
+    // 常驻窗口复用：会话经 session-frozen 事件反复到达，每次全量复位
+    void listen<FrozenPayload>('session-frozen', (e) => applySession(e.payload));
     void boot();
 
     const onKey = (e: KeyboardEvent) => {
@@ -160,14 +167,28 @@
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // 兜底拉取：覆盖窗口为预建常驻，挂载时通常尚无会话；事件先于监听注册
+  // 到达的竞态由 fetch 兜住
   async function boot() {
+    const payload = await fetchSession();
+    if (payload) applySession(payload);
+  }
+
+  /** 应用一次新会话：页面不重载，交互状态必须在此全量复位。 */
+  function applySession(payload: FrozenPayload) {
+    if (session?.snapshotId === payload.snapshotId) return;
+    selection = null;
+    hover = null;
+    annotations = [];
+    drawing = null;
+    drawAnchor = null;
+    tool = null;
+    textEdit = null;
+    busy = false;
+    cursor = 'crosshair';
+    annSeq = 0;
     loadStart = performance.now();
-    let payload = await fetchSession();
-    if (!payload) {
-      payload = await new Promise<FrozenPayload>((resolve) => {
-        void listen<FrozenPayload>('session-frozen', (e) => resolve(e.payload));
-      });
-    }
+    invalidateMosaicCache(); // 冻结图已更换，马赛克纹理缓存必须失效
     session = payload;
     phase = 'frozen';
   }

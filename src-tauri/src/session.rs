@@ -38,15 +38,14 @@ pub fn start_session(app: &AppHandle) {
                 let state = app.state::<AppState>();
                 let id = state.next_id.fetch_add(1, Ordering::SeqCst);
 
-                let jpeg = match jetsnap_win::compose::bgra_to_jpeg(
+                let display_bmp = match jetsnap_win::compose::bgra_to_bmp(
                     &cap.bgra,
                     cap.virtual_rect.w,
                     cap.virtual_rect.h,
-                    92,
                 ) {
                     Ok(j) => j,
                     Err(e) => {
-                        abort(&app, &format!("JPEG 编码失败: {e}"));
+                        abort(&app, &format!("BMP 封装失败: {e}"));
                         return;
                     }
                 };
@@ -62,18 +61,18 @@ pub fn start_session(app: &AppHandle) {
                 *state.session.lock().unwrap() = Some(SessionData {
                     id,
                     bgra: cap.bgra,
-                    jpeg,
+                    display_bmp,
                     virtual_rect: cap.virtual_rect,
                     monitors: cap.monitors,
                     windows: cap.windows,
                     hotkey_elapsed_ms: payload.hotkey_elapsed_ms,
                 });
 
-                // 主线程创建隐藏覆盖窗口（负坐标副屏用物理像素定位）
+                // 主线程确保覆盖窗口就绪（常驻复用，通常仅重设几何；负坐标副屏用物理像素定位）
                 let app2 = app.clone();
                 let vr = payload.virtual_rect;
                 let r = app.run_on_main_thread(move || {
-                    if let Err(e) = overlay::create_overlay(&app2, vr) {
+                    if let Err(e) = overlay::ensure_overlay(&app2, vr) {
                         abort(&app2, &e);
                     }
                 });
@@ -100,9 +99,10 @@ pub fn abort(app: &AppHandle, reason: &str) {
 }
 
 /// 会话正常结束（确认 / 取消），由 end_session 命令调用。
+/// 覆盖窗口隐藏复用（见 overlay::hide_overlay），不销毁。
 pub fn finish(app: &AppHandle) {
     let state = app.state::<AppState>();
     *state.session.lock().unwrap() = None;
     state.active.store(false, Ordering::SeqCst);
-    overlay::destroy_overlay(app);
+    overlay::hide_overlay(app);
 }
