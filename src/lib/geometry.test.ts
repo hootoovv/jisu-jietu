@@ -3,17 +3,22 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  annBBox,
   arrowHead,
   badgePosition,
   clampRect,
   contrastColor,
+  distToSegment,
   fontSizeForWidth,
+  hitTestAnnotation,
   hitTestWindows,
   inRect,
   mosaicBlockForWidth,
+  moveAnnotation,
   moveRect,
   normalizeRect,
   placeToolbar,
+  resizeAnnotation,
   stepNumberMap,
 } from './geometry';
 import type { Annotation } from './types';
@@ -223,5 +228,100 @@ describe('inRect 基础', () => {
     expect(inRect(r, { x: 109, y: 59 })).toBe(true);
     expect(inRect(r, { x: 110, y: 10 })).toBe(false);
     expect(inRect(r, { x: 10, y: 60 })).toBe(false);
+  });
+});
+
+describe('标注对象编辑：distToSegment', () => {
+  it('点到水平线段的距离', () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 10, y: 0 };
+    expect(distToSegment({ x: 5, y: 3 }, a, b)).toBe(3);
+    expect(distToSegment({ x: 5, y: -4 }, a, b)).toBe(4);
+  });
+  it('线段外投影钳制到端点', () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 10, y: 0 };
+    expect(distToSegment({ x: 20, y: 5 }, a, b)).toBe(Math.hypot(10, 5));
+    expect(distToSegment({ x: -3, y: 0 }, a, b)).toBe(3);
+  });
+  it('零长线段退化为点距', () => {
+    const p0 = { x: 1, y: 1 };
+    expect(distToSegment({ x: 4, y: 5 }, p0, p0)).toBe(5);
+  });
+});
+
+describe('标注对象编辑：annBBox / hitTestAnnotation', () => {
+  it('矩形标注命中边框条带、中心不命中', () => {
+    const ann: Annotation = { id: 1, kind: 'rect', color: '#f00', width: 4, rect: { x: 100, y: 100, w: 200, h: 100 } };
+    expect(hitTestAnnotation(ann, { x: 100, y: 150 }, 1)).toBe(true); // 左边框
+    expect(hitTestAnnotation(ann, { x: 300, y: 200 }, 1)).toBe(true); // 右下角
+    expect(hitTestAnnotation(ann, { x: 200, y: 150 }, 1)).toBe(false); // 内部深处
+    expect(hitTestAnnotation(ann, { x: 80, y: 120 }, 1)).toBe(false); // 左侧外 20px
+  });
+  it('笔画命中轨迹带', () => {
+    const ann: Annotation = {
+      id: 2, kind: 'pen', color: '#0f0', width: 4,
+      points: [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+    };
+    expect(hitTestAnnotation(ann, { x: 50, y: 4 }, 1)).toBe(true);
+    expect(hitTestAnnotation(ann, { x: 50, y: 30 }, 1)).toBe(false);
+  });
+  it('文本命中测量包围盒', () => {
+    const ann: Annotation = { id: 3, kind: 'text', color: '#00f', width: 4, text: 'ab', rect: { x: 50, y: 50, w: 40, h: 24 } };
+    expect(hitTestAnnotation(ann, { x: 60, y: 60 }, 1)).toBe(true);
+    expect(hitTestAnnotation(ann, { x: 200, y: 200 }, 1)).toBe(false);
+  });
+  it('标号命中圆域', () => {
+    const ann: Annotation = { id: 4, kind: 'step', color: '#f0f', width: 4, rect: { x: 100, y: 100, w: 0, h: 0 } };
+    expect(hitTestAnnotation(ann, { x: 105, y: 100 }, 1)).toBe(true);
+    expect(hitTestAnnotation(ann, { x: 200, y: 100 }, 1)).toBe(false);
+  });
+  it('annBBox 笔画外扩半线宽', () => {
+    const ann: Annotation = {
+      id: 5, kind: 'pen', color: '#000', width: 8,
+      points: [{ x: 10, y: 10 }, { x: 110, y: 10 }],
+    };
+    const bb = annBBox(ann, 1); // 半线宽 4
+    expect(bb).toEqual({ x: 6, y: 6, w: 108, h: 8 });
+  });
+});
+
+describe('标注对象编辑：moveAnnotation / resizeAnnotation', () => {
+  it('平移矩形与笔画', () => {
+    const rect: Annotation = { id: 1, kind: 'rect', color: '#f00', width: 4, rect: { x: 10, y: 10, w: 20, h: 30 } };
+    expect(moveAnnotation(rect, 5, -3).rect).toEqual({ x: 15, y: 7, w: 20, h: 30 });
+    const pen: Annotation = { id: 2, kind: 'pen', color: '#0f0', width: 4, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] };
+    expect(moveAnnotation(pen, 10, 10).points).toEqual([{ x: 11, y: 12 }, { x: 13, y: 14 }]);
+  });
+  it('以对角锚点等比放大 2 倍（矩形）', () => {
+    const ann: Annotation = { id: 1, kind: 'rect', color: '#f00', width: 4, rect: { x: 100, y: 100, w: 50, h: 50 } };
+    const anchor = { x: 100, y: 100 }; // 左上锚，拖右下角
+    const out = resizeAnnotation(ann, anchor, { x: 150, y: 150 }, { x: 200, y: 200 }) as Annotation;
+    expect(out.rect?.w).toBe(100);
+    expect(out.rect?.x).toBe(100); // 锚点不动
+    expect(out.rect?.y).toBe(100);
+  });
+  it('缩放比例钳制 [0.15, 4]', () => {
+    const ann: Annotation = { id: 1, kind: 'rect', color: '#f00', width: 4, rect: { x: 0, y: 0, w: 100, h: 100 } };
+    const tiny = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 1, y: 1 }) as Annotation;
+    expect(tiny.rect?.w).toBe(15); // 100 × 0.15
+    const huge = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 100000, y: 100000 }) as Annotation;
+    expect(huge.rect?.w).toBe(400);
+  });
+  it('文本缩放同步字号档', () => {
+    const ann: Annotation = { id: 3, kind: 'text', color: '#00f', width: 4, text: 'x', rect: { x: 0, y: 0, w: 10, h: 20 } };
+    const out = resizeAnnotation(ann, { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 150, y: 150 }) as Annotation;
+    expect(out.width).toBe(6);
+    const back = resizeAnnotation(out, { x: 0, y: 0 }, { x: 150, y: 150 }, { x: 100, y: 100 }) as Annotation;
+    expect(back.width).toBe(4);
+  });
+  it('笔画点位整体缩放', () => {
+    const ann: Annotation = {
+      id: 4, kind: 'highlighter', color: '#ff0', width: 16,
+      points: [{ x: 10, y: 10 }, { x: 110, y: 10 }],
+    };
+    const out = resizeAnnotation(ann, { x: 10, y: 10 }, { x: 110, y: 10 }, { x: 210, y: 10 }) as Annotation;
+    expect(out.points?.[0]).toEqual({ x: 10, y: 10 });
+    expect(out.points?.[1]?.x).toBe(210);
   });
 });

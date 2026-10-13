@@ -8,6 +8,7 @@
 
 import type { Annotation, Pt, Rect } from './types';
 import {
+  annBBox,
   arrowHead,
   contrastColor,
   fontSizeForWidth,
@@ -75,6 +76,8 @@ export interface AnnotateOptions {
   dpr: number;
   /** 是否裁剪到选区（显示层 true；导出层画布本身就是选区尺寸，false） */
   clip: boolean;
+  /** 选中的标注 id（显示层画选中指示框；导出层必须为 null） */
+  selectedId?: number | null;
 }
 
 export function drawAnnotations(ctx: CanvasRenderingContext2D, opts: AnnotateOptions): void {
@@ -97,9 +100,58 @@ export function drawAnnotations(ctx: CanvasRenderingContext2D, opts: AnnotateOpt
     drawAnnotation(ctx, opts.drawing, opts, nums.get(opts.drawing.id) ?? 0, true);
   }
 
+  // 选中指示框（虚线包围盒 + 四角手柄；随 offset 平移以兼容导出坐标系，但导出层不应传 selectedId）
+  if (opts.selectedId != null) {
+    const sel = opts.annotations.find((a) => a.id === opts.selectedId);
+    if (sel) {
+      const bb = annBBox(sel, opts.dpr);
+      const x = bb.x - offset.x;
+      const y = bb.y - offset.y;
+      ctx.save();
+      ctx.strokeStyle = '#3d82f6';
+      ctx.lineWidth = Math.max(1, opts.dpr);
+      ctx.setLineDash([5 * opts.dpr, 4 * opts.dpr]);
+      ctx.strokeRect(x, y, bb.w, bb.h);
+      ctx.setLineDash([]);
+      const hs = 7 * opts.dpr; // 手柄边长
+      for (const [cx, cy] of [
+        [x, y],
+        [x + bb.w, y],
+        [x + bb.w, y + bb.h],
+        [x, y + bb.h],
+      ]) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#3d82f6';
+        ctx.lineWidth = 1.5 * opts.dpr;
+        ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs);
+        ctx.strokeRect(cx - hs / 2, cy - hs / 2, hs, hs);
+      }
+      ctx.restore();
+    }
+  }
+
   if (opts.clip && selection) {
     ctx.restore();
   }
+}
+
+/** 测量文本标注的物理像素包围尺寸（与绘制同款字体/行高：600 字重，行高 1.25）。 */
+export function measureTextSize(text: string, width: number, dpr: number): { w: number; h: number } {
+  const fontPx = fontSizeForWidth(width) * dpr;
+  const lines = text.split('\n');
+  const c = getMeasureCanvas();
+  const ctx = c.getContext('2d');
+  if (!ctx) return { w: fontPx * lines.length * 2, h: fontPx * 1.25 * lines.length };
+  ctx.font = `600 ${fontPx}px ${FONT_STACK}`;
+  let w = 0;
+  for (const line of lines) w = Math.max(w, ctx.measureText(line).width);
+  return { w: Math.ceil(w), h: Math.ceil(fontPx * 1.25 * lines.length) };
+}
+
+let measureCanvas: HTMLCanvasElement | null = null;
+function getMeasureCanvas(): HTMLCanvasElement {
+  if (!measureCanvas) measureCanvas = document.createElement('canvas');
+  return measureCanvas;
 }
 
 function drawAnnotation(

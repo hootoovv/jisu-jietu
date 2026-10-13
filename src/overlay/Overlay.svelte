@@ -23,18 +23,23 @@
     drawAnnotations,
     drawMask,
     invalidateMosaicCache,
+    measureTextSize,
   } from '../lib/render';
   import {
+    annBBox,
     badgePosition,
     clampRect,
     dist,
     fontSizeForWidth,
+    hitTestAnnotation,
     hitTestWindows,
     inRect,
+    moveAnnotation,
     moveRect,
     normalizeRect,
     placeToolbar,
     rectCorners,
+    resizeAnnotation,
   } from '../lib/geometry';
   import {
     BADGE_SIZE,
@@ -78,6 +83,9 @@
   let selection = $state<Rect | null>(null);
   let hover = $state<Rect | null>(null);
   let annotations = $state<Annotation[]>([]);
+  /** 选中的标注对象 id（对象化编辑：点击选中 → 拖动/缩放/改样式/删除） */
+  let selectedAnn = $state<number | null>(null);
+  const selectedAnnotation = $derived(annotations.find((a) => a.id === selectedAnn) ?? null);
   let drawing = $state<Annotation | null>(null);
   let drawAnchor = $state<Pt | null>(null);
   let tool = $state<ToolKind | null>(null);
@@ -88,10 +96,13 @@
   let loadStart = 0;
 
   interface DragInfo {
-    mode: 'select' | 'move' | 'resize';
+    mode: 'select' | 'move' | 'resize' | 'annMove' | 'annResize';
     startPt: Pt;
     startSel: Rect;
     corner?: number;
+    /** annMove/annResize：目标标注 id 与拖拽起始快照（缩放基于快照计算，幂等） */
+    annId?: number;
+    annSnapshot?: Annotation;
     moved: boolean;
   }
   let drag = $state<DragInfo | null>(null);
@@ -105,7 +116,14 @@
   // 颜色/线宽按工具独立记忆，切换工具互不覆盖
   let styles = $state<Record<ToolKind, ToolStyle>>({ ...TOOL_DEFAULT_STYLES });
 
-  const currentStyle = $derived(tool ? styles[tool] : { color: '#E8424C', width: 4 });
+  // 工具条样式源：工具激活时为该工具默认样式；标注选中时为该对象当前样式
+  const currentStyle = $derived(
+    tool
+      ? styles[tool]
+      : selectedAnnotation
+        ? { color: selectedAnnotation.color, width: selectedAnnotation.width }
+        : { color: '#E8424C', width: 4 },
+  );
 
   // ---------- 坐标换算（唯一转换点） ----------
   const evPt = (e: PointerEvent | MouseEvent): Pt => ({
@@ -162,10 +180,17 @@
       if (phase === 'textEditing') return; // TextEditor 已 stopPropagation
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (!busy) void endSession('cancelled');
+        if (busy) return;
+        // 三层 Esc：先取消标注选中，再退出会话
+        if (selectedAnn !== null) selectedAnn = null;
+        else void endSession('cancelled');
       } else if (e.key === 'Enter' && selection && !busy) {
         e.preventDefault();
         void confirmCopy();
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedAnn !== null && !busy) {
+        e.preventDefault();
+        annotations = annotations.filter((a) => a.id !== selectedAnn);
+        selectedAnn = null;
       }
     };
     window.addEventListener('keydown', onKey);
@@ -185,6 +210,7 @@
     selection = null;
     hover = null;
     annotations = [];
+    selectedAnn = null;
     drawing = null;
     drawAnchor = null;
     tool = null;
@@ -239,6 +265,7 @@
       virtual,
       dpr,
       clip: true,
+      selectedId: selectedAnn,
     });
   });
 
@@ -246,6 +273,27 @@
   function handleHitIndex(p: Pt): number | null {
     if (!selection) return null;
     const corners = rectCorners(selection);
+    const slack = (HANDLE_SIZE / 2 + 4) * dpr;
+    for (let i = 0; i < 4; i++) {
+      if (Math.abs(p.x - corners[i].x) <= slack && Math.abs(p.y - corners[i].y) <= slack) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  /** 顶层优先的标注命中（后画的覆盖先画的）。 */
+  function hitAnnotationTopmost(p: Pt): Annotation | null {
+    for (let i = annotations.length - 1; i >= 0; i--) {
+      if (hitTestAnnotation(annotations[i], p, dpr)) return annotations[i];
+    }
+    return null;
+  }
+
+  /** 选中标注的包围盒四角手柄命中（与选区手柄同一手感）。 */
+  function annHandleHitIndex(p: Pt): number | null {
+    if (!selectedAnnotation) return null;
+    const corners = rectCorners(annBBox(selectedAnnotation, dpr));
     const slack = (HANDLE_SIZE / 2 + 4) * dpr;
     for (let i = 0; i < 4; i++) {
       if (Math.abs(p.x - corners[i].x) <= slack && Math.abs(p.y - corners[i].y) <= slack) {
@@ -264,9 +312,6 @@
     if (hi !== null && selection) {
       drag = { mode: 'resize', startPt: p, startSel: selection, corner: hi, moved: true };
       phase = 'adjust';
-    } else if (selection && inRect(selection, p) && !tool) {
-      drag = { mode: 'move', startPt: p, startSel: selection, moved: true };
-      phase = 'adjust';
     } else if (tool) {
       if (tool === 'text') {
         // 必须 cancel pointerdown：否则同一交互序列的 mousedown 默认行为会把焦点
@@ -276,9 +321,48 @@
       }
       startDrawing(p);
     } else {
-      drag = { mode: 'select', startPt: p, startSel: selection ?? { x: p.x, y: p.y, w: 0, h: 0 }, moved: false };
-      phase = 'dragSelect';
-      hover = null;
+      // 无工具：标注对象编辑优先于选区操作
+      const ahi = annHandleHitIndex(p);
+      if (ahi !== null && selectedAnnotation) {
+        drag = {
+          mode: 'annResize',
+          startPt: p,
+          startSel: selection ?? { x: 0, y: 0, w: 0, h: 0 },
+          corner: ahi,
+          annId: selectedAnnotation.id,
+          annSnapshot: selectedAnnotation,
+          moved: true,
+        };
+        phase = 'adjust';
+      } else {
+        const hit = hitAnnotationTopmost(p);
+        if (hit) {
+          selectedAnn = hit.id;
+          drag = {
+            mode: 'annMove',
+            startPt: p,
+            startSel: selection ?? { x: 0, y: 0, w: 0, h: 0 },
+            annId: hit.id,
+            annSnapshot: hit,
+            moved: false,
+          };
+        } else {
+          selectedAnn = null;
+          if (selection && inRect(selection, p)) {
+            drag = { mode: 'move', startPt: p, startSel: selection, moved: true };
+            phase = 'adjust';
+          } else {
+            drag = {
+              mode: 'select',
+              startPt: p,
+              startSel: selection ?? { x: p.x, y: p.y, w: 0, h: 0 },
+              moved: false,
+            };
+            phase = 'dragSelect';
+            hover = null;
+          }
+        }
+      }
     }
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
@@ -296,6 +380,18 @@
       } else if (drag.mode === 'resize' && drag.corner !== undefined) {
         const anchor = rectCorners(drag.startSel)[(drag.corner + 2) % 4];
         selection = clampRect(normalizeRect(anchor, p), virtual, MIN_SELECTION);
+      } else if (drag.mode === 'annMove' && drag.annSnapshot) {
+        const moved = moveAnnotation(drag.annSnapshot, p.x - drag.startPt.x, p.y - drag.startPt.y);
+        annotations = annotations.map((a) => (a.id === drag.annId ? moved : a));
+      } else if (drag.mode === 'annResize' && drag.annSnapshot && drag.corner !== undefined) {
+        const anchor = rectCorners(annBBox(drag.annSnapshot, dpr))[(drag.corner + 2) % 4];
+        let scaled = resizeAnnotation(drag.annSnapshot, anchor, drag.startPt, p);
+        if (scaled.kind === 'text' && scaled.rect) {
+          // 字号随比例变化，包围盒须按新字号重测
+          const m = measureTextSize(scaled.text ?? '', scaled.width, dpr);
+          scaled = { ...scaled, rect: { ...scaled.rect, w: m.w, h: m.h } };
+        }
+        annotations = annotations.map((a) => (a.id === drag.annId ? scaled : a));
       }
       return;
     }
@@ -313,6 +409,7 @@
       hover = null;
       const hi = handleHitIndex(p);
       if (hi !== null) cursor = CURSOR_BY_CORNER[hi];
+      else if (!tool && hitAnnotationTopmost(p)) cursor = 'pointer';
       else if (selection && inRect(selection, p) && !tool) cursor = 'move';
       else cursor = tool ? TOOL_CURSORS[tool] : CURSOR_CROSSHAIR;
     }
@@ -352,6 +449,7 @@
     // 工具激活时双击属于绘制语义（如文本工具连续放置），不得触发「双击复制」
     if (busy || phase === 'textEditing' || tool) return;
     const p = evPt(e);
+    if (hitAnnotationTopmost(p)) return; // 双击标注对象不触发复制退出
     if (selection && inRect(selection, p)) void confirmCopy();
   }
 
@@ -445,6 +543,8 @@
     if (textEdit) {
       const st = styles.text;
       annSeq += 1;
+      // 包围盒按实际字体测量（对象化选中/缩放的几何依据）
+      const m = measureTextSize(text, st.width, dpr);
       annotations = [
         ...annotations,
         {
@@ -453,7 +553,7 @@
           color: st.color,
           width: st.width,
           text,
-          rect: { x: textEdit.x, y: textEdit.y, w: 0, h: 0 },
+          rect: { x: textEdit.x, y: textEdit.y, w: m.w, h: m.h },
         },
       ];
     }
@@ -468,16 +568,29 @@
 
   // ---------- 工具条回调 ----------
   function undo() {
+    const last = annotations[annotations.length - 1];
+    if (last && last.id === selectedAnn) selectedAnn = null;
     annotations = annotations.slice(0, -1);
   }
 
   function pickTool(t: ToolKind | null) {
     tool = t;
+    selectedAnn = null; // 进入绘制模式，退出对象编辑
     // 立即切换光标，不等首次移动
     cursor = t ? TOOL_CURSORS[t] : CURSOR_CROSSHAIR;
   }
 
   function patchStyle(patch: Partial<ToolStyle>) {
+    // 有选中对象时改的是对象本身（颜色/线宽/字号档/马赛克块），而非工具默认值
+    if (selectedAnnotation) {
+      let next: Annotation = { ...selectedAnnotation, ...patch };
+      if (next.kind === 'text' && next.rect) {
+        const m = measureTextSize(next.text ?? '', next.width, dpr);
+        next = { ...next, rect: { ...next.rect, w: m.w, h: m.h } };
+      }
+      annotations = annotations.map((a) => (a.id === next.id ? next : a));
+      return;
+    }
     if (!tool) return;
     styles[tool] = { ...styles[tool], ...patch };
   }
@@ -628,7 +741,7 @@
           hasUndo={annotations.length > 0}
           {tool}
           style={currentStyle}
-          styleEnabled={!!tool}
+          styleEnabled={!!tool || selectedAnn !== null}
           {busy}
           onundo={undo}
           ontool={pickTool}

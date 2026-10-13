@@ -172,3 +172,194 @@ export function contrastColor(hex: string): string {
   const lum = 0.299 * r + 0.587 * g + 0.114 * b;
   return lum > 140 ? '#000000' : '#FFFFFF';
 }
+
+// ---------- 标注对象编辑（对象化：命中 / 包围盒 / 移动 / 缩放） ----------
+
+/** 点到线段的最近距离。 */
+export function distToSegment(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return dist(p, a);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+
+/**
+ * 标注包围盒（物理像素；用于选中指示框与缩放锚点）。
+ * 笔画类外扩半线宽；text 需提前把测量尺寸写入 rect.w/h；
+ * step 为圆心外接方框（半径与绘制一致：fontSizeForWidth(width)×dpr×0.8）。
+ */
+export function annBBox(a: Annotation, dpr = 1): Rect {
+  const empty = { x: 0, y: 0, w: 0, h: 0 };
+  const pad = (a.width * dpr) / 2;
+  switch (a.kind) {
+    case 'rect':
+    case 'ellipse':
+      return a.rect
+        ? { x: a.rect.x - pad, y: a.rect.y - pad, w: a.rect.w + pad * 2, h: a.rect.h + pad * 2 }
+        : empty;
+    case 'text':
+      return a.rect ? { ...a.rect } : empty;
+    case 'arrow': {
+      if (!a.line) return empty;
+      const x = Math.min(a.line.x1, a.line.x2) - pad;
+      const y = Math.min(a.line.y1, a.line.y2) - pad;
+      return {
+        x,
+        y,
+        w: Math.abs(a.line.x2 - a.line.x1) + pad * 2,
+        h: Math.abs(a.line.y2 - a.line.y1) + pad * 2,
+      };
+    }
+    case 'pen':
+    case 'highlighter':
+    case 'mosaic': {
+      if (!a.points || a.points.length === 0) return empty;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const q of a.points) {
+        minX = Math.min(minX, q.x);
+        minY = Math.min(minY, q.y);
+        maxX = Math.max(maxX, q.x);
+        maxY = Math.max(maxY, q.y);
+      }
+      return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+    }
+    case 'step': {
+      const r = fontSizeForWidth(a.width) * dpr * 0.8;
+      return a.rect ? { x: a.rect.x - r, y: a.rect.y - r, w: r * 2, h: r * 2 } : empty;
+    }
+  }
+}
+
+/**
+ * 标注命中测试（坐标物理像素，tol 为逻辑容差 ×dpr）。
+ * 矩形/椭圆命中边框条带；笔画/箭头命中轨迹带；文本/标号命中包围区域。
+ */
+export function hitTestAnnotation(a: Annotation, p: Pt, dpr = 1, tolLogical = 6): boolean {
+  const tol = tolLogical * dpr;
+  switch (a.kind) {
+    case 'rect': {
+      if (!a.rect) return false;
+      const band = Math.max(tol, (a.width * dpr) / 2 + 2 * dpr);
+      const r = a.rect;
+      const dx = Math.max(r.x - p.x, 0, p.x - (r.x + r.w));
+      const dy = Math.max(r.y - p.y, 0, p.y - (r.y + r.h));
+      if (dx > 0 || dy > 0) return Math.hypot(dx, dy) <= band; // 外部距边框
+      const inner = Math.min(p.x - r.x, r.x + r.w - p.x, p.y - r.y, r.y + r.h - p.y);
+      return inner <= band; // 内部距最近边
+    }
+    case 'ellipse': {
+      if (!a.rect) return false;
+      const rx = Math.max(1, a.rect.w / 2);
+      const ry = Math.max(1, a.rect.h / 2);
+      const cx = a.rect.x + rx;
+      const cy = a.rect.y + ry;
+      const nx = (p.x - cx) / rx;
+      const ny = (p.y - cy) / ry;
+      const rr = Math.hypot(nx, ny);
+      return Math.abs(rr - 1) <= Math.max(tol, (a.width * dpr) / 2 + 2 * dpr) / Math.max(1, Math.min(rx, ry));
+    }
+    case 'arrow': {
+      if (!a.line) return false;
+      const band = Math.max(tol, (a.width * dpr) / 2 + 2 * dpr);
+      return distToSegment(p, { x: a.line.x1, y: a.line.y1 }, { x: a.line.x2, y: a.line.y2 }) <= band;
+    }
+    case 'pen':
+    case 'highlighter':
+    case 'mosaic': {
+      if (!a.points || a.points.length < 2) {
+        return a.points?.length === 1 ? dist(p, a.points[0]) <= Math.max(tol, (a.width * dpr) / 2) : false;
+      }
+      const band = Math.max(tol, (a.width * dpr) / 2 + 2 * dpr);
+      for (let i = 1; i < a.points.length; i++) {
+        if (distToSegment(p, a.points[i - 1], a.points[i]) <= band) return true;
+      }
+      return false;
+    }
+    case 'text': {
+      if (!a.rect) return false;
+      return inRect({ x: a.rect.x - tol, y: a.rect.y - tol, w: a.rect.w + tol * 2, h: a.rect.h + tol * 2 }, p);
+    }
+    case 'step': {
+      if (!a.rect) return false;
+      const r = fontSizeForWidth(a.width) * dpr * 0.8;
+      return dist(p, { x: a.rect.x, y: a.rect.y }) <= r + tol;
+    }
+  }
+}
+
+/** 整体平移标注（dx/dy 物理像素）。 */
+export function moveAnnotation(a: Annotation, dx: number, dy: number): Annotation {
+  const sh = (q: Pt): Pt => ({ x: q.x + dx, y: q.y + dy });
+  if (a.rect) return { ...a, rect: { ...sh({ x: a.rect.x, y: a.rect.y }), w: a.rect.w, h: a.rect.h } };
+  if (a.line) {
+    return { ...a, line: { x1: a.line.x1 + dx, y1: a.line.y1 + dy, x2: a.line.x2 + dx, y2: a.line.y2 + dy } };
+  }
+  if (a.points) return { ...a, points: a.points.map(sh) };
+  return a;
+}
+
+/**
+ * 以包围盒对角锚点等比缩放标注（基于拖拽起始快照计算，幂等无漂移）。
+ * scale 钳制在 [0.15, 4]；text/step 的 width（字号/标号尺寸档）随比例同步缩放。
+ */
+export function resizeAnnotation(a: Annotation, anchor: Pt, from: Pt, to: Pt): Annotation {
+  const fd = dist(from, anchor);
+  if (fd < 4) return a;
+  const s = Math.min(4, Math.max(0.15, dist(to, anchor) / fd));
+  const sc = (v: number, o: number) => o + (v - o) * s;
+  switch (a.kind) {
+    case 'rect':
+    case 'ellipse':
+      return a.rect
+        ? {
+            ...a,
+            rect: {
+              x: sc(a.rect.x, anchor.x),
+              y: sc(a.rect.y, anchor.y),
+              w: Math.max(4, a.rect.w * s),
+              h: Math.max(4, a.rect.h * s),
+            },
+          }
+        : a;
+    case 'text':
+      return a.rect
+        ? {
+            ...a,
+            width: Math.min(20, Math.max(1, a.width * s)),
+            rect: { x: sc(a.rect.x, anchor.x), y: sc(a.rect.y, anchor.y), w: Math.max(4, a.rect.w * s), h: Math.max(4, a.rect.h * s) },
+          }
+        : a;
+    case 'arrow':
+      return a.line
+        ? {
+            ...a,
+            line: {
+              x1: sc(a.line.x1, anchor.x),
+              y1: sc(a.line.y1, anchor.y),
+              x2: sc(a.line.x2, anchor.x),
+              y2: sc(a.line.y2, anchor.y),
+            },
+          }
+        : a;
+    case 'pen':
+    case 'highlighter':
+    case 'mosaic':
+      return a.points
+        ? { ...a, points: a.points.map((q) => ({ x: sc(q.x, anchor.x), y: sc(q.y, anchor.y) })) }
+        : a;
+    case 'step':
+      return a.rect
+        ? {
+            ...a,
+            width: Math.min(20, Math.max(1, a.width * s)),
+            rect: { x: sc(a.rect.x, anchor.x), y: sc(a.rect.y, anchor.y), w: 0, h: 0 },
+          }
+        : a;
+  }
+}
