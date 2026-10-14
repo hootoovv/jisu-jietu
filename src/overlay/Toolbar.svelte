@@ -59,9 +59,23 @@
   /** 弹层向上弹出（工具条贴近屏幕下沿时，向下展开会被裁掉） */
   let popoverAbove = $state(false);
   let customColor = $state('#E8424C');
+  let rootEl = $state<HTMLDivElement | null>(null);
 
-  /** 色板弹层约 130px 高（2 行色格 + 自定义行），不足则向上弹 */
+  /** 弹层约 130px 高（2 行色格 + 自定义行），不足则向上弹 */
   const POPOVER_SPACE_NEED = 130;
+
+  // 点击外部自动关闭弹层：弹层滞留会吃掉下一次点击（如换色格/滑杆区域），
+  // 用户表现为「点工具或画布第一下没反应，要点第二次」
+  $effect(() => {
+    if (popover === null) return;
+    const onDown = (e: PointerEvent) => {
+      if (rootEl && e.target instanceof Node && !rootEl.contains(e.target)) {
+        popover = null;
+      }
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  });
 
   function togglePopover(which: 'color' | 'width' | 'font', e: MouseEvent) {
     if (popover === which) {
@@ -93,7 +107,7 @@
   }
 </script>
 
-<div class="toolbar" role="toolbar" tabindex="-1" onpointerdown={stop} ondblclick={stop}>
+<div class="toolbar" role="toolbar" tabindex="-1" bind:this={rootEl} onpointerdown={stop} ondblclick={stop}>
   <!-- 撤销 -->
   <button class="tb-btn" class:disabled={!hasUndo} title="撤销 (标注)" disabled={!hasUndo} onclick={() => onundo()}>
     <svg viewBox="0 0 24 24" width="18" height="18">

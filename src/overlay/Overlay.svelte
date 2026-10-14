@@ -111,6 +111,7 @@
   let imgEl = $state<HTMLImageElement | null>(null);
   let maskCanvas = $state<HTMLCanvasElement | null>(null);
   let annotCanvas = $state<HTMLCanvasElement | null>(null);
+  let textEditorRef = $state<{ commitNow: () => void } | null>(null);
 
   // 各工具默认颜色互异（TOOL_DEFAULT_STYLES）；patchStyle 只写当前工具，
   // 颜色/线宽按工具独立记忆，切换工具互不覆盖
@@ -598,7 +599,12 @@
   }
 
   function pickTool(t: ToolKind | null) {
-    if (phase === 'textEditing') return; // 编辑中不允许切工具（先提交/取消）
+    if (phase === 'textEditing') {
+      // 点击工具按钮 = 先收起文本编辑器（提交已输入内容）再切换，
+      // 不能吞掉这次点击——否则编辑器失焦滞留时所有工具按钮都点不动
+      textEditorRef?.commitNow();
+      if (phase === 'textEditing') return;
+    }
     tool = t;
     selectedAnn = null; // 进入绘制模式，退出对象编辑
     // 立即切换光标，不等首次移动
@@ -787,6 +793,7 @@
     {#if textEdit && tool === 'text' && selL}
       {@const maxW = Math.max(60, selL.x + selL.w - toL(textEdit.x))}
       <TextEditor
+        bind:this={textEditorRef}
         x={toL(textEdit.x)}
         y={toL(textEdit.y)}
         color={styles.text.color}

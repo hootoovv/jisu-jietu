@@ -48,6 +48,11 @@
       oncancel();
     }
   }
+
+  /** 供宿主请求提交（如点击工具条按钮时收起编辑器而非吞掉点击）。 */
+  export function commitNow() {
+    commit();
+  }
 </script>
 
 <div
