@@ -4,6 +4,7 @@
    * 热键录制（即时生效/冲突提示）、开机自启、默认保存目录、默认格式、测试截图。
    */
   import { onMount } from 'svelte';
+  import { getVersion } from '@tauri-apps/api/app';
   import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import {
     getSettings,
@@ -17,9 +18,12 @@
   let settings = $state<Settings | null>(null);
   let recording = $state(false);
   let message = $state<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  let appVersion = $state('');
 
   onMount(() => {
     void load();
+    // 版本号直读应用配置（tauri.conf.json），避免硬编码漂移
+    void getVersion().then((v) => (appVersion = v));
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
   });
@@ -125,7 +129,7 @@
     <div class="logo">极速</div>
     <div>
       <h1>极速截图</h1>
-      <p class="sub">v2.0.0 · AI赋能，模仿 QQ 截图功能的轻量截图工具。</p>
+      <p class="sub">v{appVersion || '…'} · AI赋能，模仿 QQ 截图功能的轻量截图工具。</p>
     </div>
   </header>
 

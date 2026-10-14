@@ -23,6 +23,10 @@ pub fn run() {
     }));
 
     tauri::Builder::default()
+        // 单实例限制：必须最先注册；二次启动时唤起已有实例的设置窗口并立即退出
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            overlay::open_settings(app);
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
