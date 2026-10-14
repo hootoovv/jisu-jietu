@@ -86,6 +86,8 @@
   /** 选中的标注对象 id（对象化编辑：点击选中 → 拖动/缩放/改样式/删除） */
   let selectedAnn = $state<number | null>(null);
   const selectedAnnotation = $derived(annotations.find((a) => a.id === selectedAnn) ?? null);
+  /** 双击进入重编辑的文本对象快照（编辑期间已从画布摘下；取消时原样还原） */
+  let editingAnn = $state<Annotation | null>(null);
   let drawing = $state<Annotation | null>(null);
   let drawAnchor = $state<Pt | null>(null);
   let tool = $state<ToolKind | null>(null);
@@ -117,20 +119,45 @@
   // 颜色/线宽按工具独立记忆，切换工具互不覆盖
   let styles = $state<Record<ToolKind, ToolStyle>>({ ...TOOL_DEFAULT_STYLES });
 
-  // 工具条样式源：工具激活时为该工具默认样式；标注选中时为该对象当前样式
-  // （文本上下文附带 font/size/bold，供字体设置弹层显示与修改）
+  // 工具条样式源：编辑既有文本时为该对象样式；工具激活时为该工具默认样式；
+  // 标注选中时为该对象当前样式（文本上下文附带 font/size/bold）
   const currentStyle = $derived(
-    tool
-      ? styles[tool]
-      : selectedAnnotation
-        ? {
-            color: selectedAnnotation.color,
-            width: selectedAnnotation.width,
-            font: selectedAnnotation.font,
-            size: selectedAnnotation.size,
-            bold: selectedAnnotation.bold,
-          }
-        : { color: '#E8424C', width: 4 },
+    phase === 'textEditing' && editingAnn
+      ? {
+          color: editingAnn.color,
+          width: editingAnn.width,
+          font: editingAnn.font,
+          size: editingAnn.size,
+          bold: editingAnn.bold,
+        }
+      : tool
+        ? styles[tool]
+        : selectedAnnotation
+          ? {
+              color: selectedAnnotation.color,
+              width: selectedAnnotation.width,
+              font: selectedAnnotation.font,
+              size: selectedAnnotation.size,
+              bold: selectedAnnotation.bold,
+            }
+          : { color: '#E8424C', width: 4 },
+  );
+
+  // 编辑器样式源：重编辑用对象自身样式，新建用工具默认样式
+  const editStyle = $derived(
+    phase === 'textEditing' && editingAnn
+      ? {
+          color: editingAnn.color,
+          size: editingAnn.size ?? 18,
+          font: editingAnn.font,
+          bold: editingAnn.bold,
+        }
+      : {
+          color: styles.text.color,
+          size: styles.text.size ?? 18,
+          font: styles.text.font,
+          bold: styles.text.bold,
+        },
   );
 
   // ---------- 坐标换算（唯一转换点） ----------
@@ -221,6 +248,7 @@
     hover = null;
     annotations = [];
     selectedAnn = null;
+    editingAnn = null;
     drawing = null;
     drawAnchor = null;
     tool = null;
@@ -471,8 +499,25 @@
     // 工具激活时双击属于绘制语义（如文本工具连续放置），不得触发「双击复制」
     if (busy || phase === 'textEditing' || tool) return;
     const p = evPt(e);
-    if (hitAnnotationTopmost(p)) return; // 双击标注对象不触发复制退出
+    const hit = hitAnnotationTopmost(p);
+    if (hit) {
+      // 双击文本对象 → 就地重编辑内容
+      if (hit.kind === 'text') beginEditText(hit);
+      return; // 双击标注对象不触发复制退出
+    }
     if (selection && inRect(selection, p)) void confirmCopy();
+  }
+
+  /** 进入既有文本对象的重编辑：原对象摘下画布（避免视觉重复），提交按原 id 回填。 */
+  function beginEditText(a: Annotation) {
+    if (!a.rect || !a.text) return;
+    editingAnn = a;
+    annotations = annotations.filter((x) => x.id !== a.id);
+    selectedAnn = null;
+    tool = 'text';
+    cursor = 'text';
+    textEdit = { x: a.rect.x, y: a.rect.y };
+    phase = 'textEditing';
   }
 
   // ---------- 标注引擎 ----------
@@ -563,30 +608,52 @@
 
   function onTextCommit(text: string) {
     if (textEdit) {
-      const st = styles.text;
-      annSeq += 1;
-      // 包围盒按实际字体测量（对象化选中/缩放的几何依据）
+      // 样式源：重编辑沿用对象自身（含编辑期间的样式修改），新建用工具默认
+      const st = editingAnn
+        ? {
+            color: editingAnn.color,
+            width: editingAnn.width,
+            font: editingAnn.font,
+            size: editingAnn.size ?? 18,
+            bold: editingAnn.bold,
+          }
+        : {
+            color: styles.text.color,
+            width: styles.text.width,
+            font: styles.text.font,
+            size: styles.text.size ?? 18,
+            bold: styles.text.bold,
+          };
       const m = measureTextSize(text, st, dpr);
-      annotations = [
-        ...annotations,
-        {
-          id: annSeq,
-          kind: 'text',
-          color: st.color,
-          width: st.width,
-          font: st.font,
-          size: st.size ?? 18,
-          bold: st.bold,
-          text,
-          rect: { x: textEdit.x, y: textEdit.y, w: m.w, h: m.h },
-        },
-      ];
+      if (editingAnn) {
+        // 原 id 回填（undo 序、选中态语义不变）
+        annotations = [
+          ...annotations,
+          { ...editingAnn, ...st, text, rect: { x: textEdit.x, y: textEdit.y, w: m.w, h: m.h } },
+        ];
+      } else {
+        annSeq += 1;
+        annotations = [
+          ...annotations,
+          {
+            id: annSeq,
+            kind: 'text',
+            ...st,
+            text,
+            rect: { x: textEdit.x, y: textEdit.y, w: m.w, h: m.h },
+          },
+        ];
+      }
     }
+    editingAnn = null;
     textEdit = null;
     phase = 'selected';
   }
 
   function onTextCancel() {
+    // 重编辑取消 = 原对象原样还原
+    if (editingAnn) annotations = [...annotations, editingAnn];
+    editingAnn = null;
     textEdit = null;
     phase = 'selected';
   }
@@ -612,6 +679,11 @@
   }
 
   function patchStyle(patch: Partial<ToolStyle>) {
+    // 重编辑中：样式修改作用于被编辑对象（编辑器实时反映）
+    if (phase === 'textEditing' && editingAnn) {
+      editingAnn = { ...editingAnn, ...patch };
+      return;
+    }
     // 有选中对象时改的是对象本身（颜色/线宽/字号档/马赛克块），而非工具默认值
     if (selectedAnnotation) {
       let next: Annotation = { ...selectedAnnotation, ...patch };
@@ -796,10 +868,11 @@
         bind:this={textEditorRef}
         x={toL(textEdit.x)}
         y={toL(textEdit.y)}
-        color={styles.text.color}
-        fontSize={styles.text.size ?? 18}
-        font={styles.text.font}
-        bold={styles.text.bold}
+        color={editStyle.color}
+        fontSize={editStyle.size}
+        font={editStyle.font}
+        bold={editStyle.bold}
+        initialText={editingAnn?.text ?? ''}
         maxWidth={maxW}
         oncommit={onTextCommit}
         oncancel={onTextCancel}

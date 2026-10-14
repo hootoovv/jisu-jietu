@@ -15,17 +15,29 @@
     /** 字体族（空 = 默认栈）与加粗，与提交后的标注渲染保持一致 */
     font?: string;
     bold?: boolean;
+    /** 重编辑既有文本对象时预填的内容（空 = 新建） */
+    initialText?: string;
     oncommit: (text: string) => void;
     oncancel: () => void;
   }
 
-  let { x, y, color, fontSize, maxWidth, font = '', bold = false, oncommit, oncancel }: Props =
+  let { x, y, color, fontSize, maxWidth, font = '', bold = false, initialText = '', oncommit, oncancel }: Props =
     $props();
 
   let el = $state<HTMLDivElement | undefined>(undefined);
   let done = false;
 
   onMount(() => {
+    if (initialText) {
+      el.textContent = initialText;
+      // 光标移到文本末尾，便于追加修改
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
     el?.focus();
   });
 
